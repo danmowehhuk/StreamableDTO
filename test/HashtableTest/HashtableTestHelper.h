@@ -25,6 +25,20 @@ class HashtableTestHelper {
       delete entry;
       return out;
     };
+    int getEntryCount(Hashtable* table) {
+      return table->_count;
+    };
+    bool verifyEntryCount(Hashtable* table, int count) {
+      int entryCount = 0;
+      for (int i = 0; i < table->_tableSize; i++) {
+        Hashtable::Entry* entry = table->_table[i];
+        while (entry != nullptr) {
+          entryCount++;
+          entry = entry->next;
+        }
+      }
+      return (entryCount == count);
+    };
 
   private:
     HashtableTestHelper(HashtableTestHelper &t) = delete;

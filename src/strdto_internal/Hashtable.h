@@ -50,7 +50,7 @@ class Hashtable {
      * in the table, whether or not they are used/overloaded. _count indicates
      * the actual number of Entry's in the table.
      */
-    static const int INITIAL_TABLE_SIZE = 16;
+    static const int INITIAL_TABLE_SIZE = 8;
     Entry** _table;
     int _tableSize;
     int _count;
@@ -112,37 +112,41 @@ class Hashtable {
       return keysMatch;
     };
 
-    // bool resize(int newSize) {
-    //   Entry** newTable = new Entry*[newSize]();
-    //   if (!newTable) {
-    //     return false;
-    //   }
-    //   for (int i = 0; i < tableSize; ++i) {
-    //     Entry* entry = table[i];
-    //     while (entry) {
-    //       Entry* next = entry->next;
-    //       int index = hash(entry->key) % newSize;
-    //       entry->next = newTable[index];
-    //       newTable[index] = entry;
-    //       entry = next;
-    //     }
-    //   }
-    //   delete[] table;
-    //   table = newTable;
-    //   tableSize = newSize;
-    //   return true;
-    // };
+    /*
+     * Resize the table, rehashing all keys to redistribute entries.
+     */
+    bool resize(int newSize) {
+      Entry** newTable = new Entry*[newSize]();
+      if (!newTable) {
+        return false;
+      }
+      for (int i = 0; i < _tableSize; ++i) {
+        Entry* entry = _table[i];
+        while (entry) {
+          Entry* next = entry->next;
+          bool pmemKey = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
+          int index = hash(entry->key, pmemKey) % newSize;
+          entry->next = newTable[index];
+          newTable[index] = entry;
+          entry = next;
+        }
+      }
+      delete[] _table;
+      _table = newTable;
+      _tableSize = newSize;
+      return true;
+    };
 
   public:
     Hashtable() : _tableSize(INITIAL_TABLE_SIZE), _count(0) {
       _table = new Entry*[_tableSize]();
     };
-    Hashtable(size_t initialCapacity, float loadFactor) 
+    Hashtable(size_t initialCapacity, float loadFactor = 0.7) 
         : _tableSize(initialCapacity), _count(0), _loadFactorThreshold(loadFactor) {
       _table = new Entry*[_tableSize]();
     };
     ~Hashtable() {
-        // clear();
+        clear();
         delete[] _table;
     };
 
@@ -152,92 +156,114 @@ class Hashtable {
     //   KeyValuePair* next;
     // };
 
-    // bool put(const char* key, const char* value, bool keyPmem = false, bool valPmem = false) {
-    //   int index = hash(key, keyPmem);
-    //   Entry* entry = table[index];
-    //   while (entry != nullptr) {
-    //     if (keyMatches(key, entry, keyPmem)) {
-    //         entry->value = value;
-    //         bool existingKeyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE)
-    //         entry->type = getMemoryType(existingKeyPmem, valPmem);
-    //         return true;
-    //     }
-    //     entry = entry->next;
-    //   }
-    //   EntryMemoryType type = getMemoryType(keyPmem, valPmem);
-    //   Entry* newEntry = new Entry(key, value, type);
-    //   newEntry->next = table[index];
-    //   table[index] = newEntry;
-    //   ++count;
-    //   if (static_cast<float>(count) / tableSize > loadFactorThreshold) {
-    //     if (!resize(tableSize * 2)) {
-    //       return false;
-    //     }
-    //   }
-    //   return true;
-    // };
+    /*
+     * Puts a key-value pair in the table. If the key already exists,
+     * update the value. Resize the table if necessary.
+     */
+    bool put(const char* key, const char* value, bool keyPmem = false, bool valPmem = false) {
+      int index = hash(key, keyPmem);
+      Entry* entry = _table[index];
+      while (entry != nullptr) {
+        if (keyMatches(key, entry, keyPmem)) {
+            entry->value = value;
+            bool existingKeyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
+            entry->type = getMemoryType(existingKeyPmem, valPmem);
+            return true;
+        }
+        entry = entry->next;
+      }
+      EntryMemoryType type = getMemoryType(keyPmem, valPmem);
+      Entry* newEntry = new Entry(type, key, value);
+      newEntry->next = _table[index];
+      _table[index] = newEntry;
+      _count++;
+      if (static_cast<float>(_count) / _tableSize > _loadFactorThreshold) {
+        if (!resize(_tableSize * 2)) {
+          return false;
+        }
+      }
+      return true;
+    };
 
-    // bool exists(const char* key, bool keyPmem = false) const {
-    //   int index = hash(key, keyPmem);
-    //   Entry* entry = table[index];
-    //   while (entry != nullptr) {
-    //     if (keyMatches(key, entry, keyPmem)) {
-    //       return true;
-    //     }
-    //     entry = entry->next;
-    //   }
-    //   return false;
-    // };
-        
-    // char* get(const char* key, bool keyPmem = false) const {
-    //   int index = hash(key);
-    //   Entry* entry = table[index];
-    //   while (entry != nullptr) {
-    //     if (keyMatches(key, entry, keyPmem)) {
-    //       return &(entry->value);
-    //     }
-    //     entry = entry->next;
-    //   }
-    //   return nullptr; // Return null if the key is not found
-    // };
+    /*
+     * Checks if a key exists in the table.
+     */
+    bool exists(const char* key, bool keyPmem = false) const {
+      int index = hash(key, keyPmem);
+      Entry* entry = _table[index];
+      while (entry != nullptr) {
+        if (keyMatches(key, entry, keyPmem)) {
+          return true;
+        }
+        entry = entry->next;
+      }
+      return false;
+    };
+
+    /*
+     * Gets the raw value pointer associated with the given key. The
+     * caller is expected to know whether the return value points to 
+     * PROGMEM or regular memory.
+     *
+     * Returns a nullptr if the key is not found.
+     */
+    char* get(const char* key, bool keyPmem = false) const {
+      int index = hash(key, keyPmem);
+      Entry* entry = _table[index];
+      while (entry != nullptr) {
+        if (keyMatches(key, entry, keyPmem)) {
+          return entry->value;
+        }
+        entry = entry->next;
+      }
+      return nullptr;
+    };
     
-    // bool remove(const char* key, bool keyPmem = false) {
-    //   int index = hash(key);
-    //   Entry* current = table[index];
-    //   Entry* prev = nullptr;
-    //   while (current != nullptr) {
-    //     if (keyMatches(key, current, keyPmem)) {
-    //       if (prev != nullptr) {
-    //         prev->next = current->next;
-    //       } else {
-    //         table[index] = current->next;
-    //       }
-    //       delete current;
-    //       --count;
-    //       return true;
-    //     }
-    //     prev = current;
-    //     current = current->next;
-    //   }
-    //   return false;
-    // };
+    /*
+     * Removes the entry with the given key if it exists. Returns
+     * true if an entry was removed, otherwise false.
+     */
+    bool remove(const char* key, bool keyPmem = false) {
+      int index = hash(key, keyPmem);
+      Entry* current = _table[index];
+      Entry* prev = nullptr;
+      while (current != nullptr) {
+        if (keyMatches(key, current, keyPmem)) {
+          if (prev != nullptr) {
+            prev->next = current->next;
+          } else {
+            _table[index] = current->next;
+          }
+          delete current;
+          _count--;
+          return true;
+        }
+        prev = current;
+        current = current->next;
+      }
+      return false;
+    };
 
-    // bool clear() {
-    //   for (int i = 0; i < _tableSize; ++i) {
-    //     Entry* entry = _table[i];
-    //     while (entry != nullptr) {
-    //       Entry* toDelete = entry;
-    //       entry = entry->next;
-    //       delete toDelete;
-    //     }
-    //     _table[i] = nullptr;
-    //   }
-    //   _count = 0;
-    //   // if (_tableSize > INITIAL_TABLE_SIZE) {
-    //   //   return resize(INITIAL_TABLE_SIZE);
-    //   // }
-    //   return true;
-    // };
+    /*
+     * Removes all the entries from the table and resets it to its
+     * initial size.
+     */
+    bool clear() {
+      for (int i = 0; i < _tableSize; ++i) {
+        Entry* entry = _table[i];
+        while (entry != nullptr) {
+          Entry* toDelete = entry;
+          entry = entry->next;
+          delete toDelete;
+        }
+        _table[i] = nullptr;
+      }
+      _count = 0;
+      if (_tableSize > INITIAL_TABLE_SIZE) {
+        return resize(INITIAL_TABLE_SIZE);
+      }
+      return true;
+    };
 
 };
  
