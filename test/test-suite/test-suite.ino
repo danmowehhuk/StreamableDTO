@@ -1,4 +1,3 @@
-#include <SimpleVector.h>
 #include <StreamableDTO.h>
 #include <StreamableManager.h>
 #include <StringStream.h>
@@ -21,91 +20,28 @@ StreamableDTO* typeMapper(uint16_t typeId) {
       dto = new MyTypedDTO();
       break;
     default:
-      Serial.println(STR("FATAL! Unknown type: ") + String(typeId));
+      // unknown type
       break;
   }
   return dto;
 };
-
-void testPropertyOperations(TestInvocation* t) {
-  t->name = String(F("Standard property operations"));
-  StreamableDTO* dto = new StreamableDTO();
-  do {
-    dto->setProperty(STR("foo"), STR("bar"));
-    if (!dto->containsKey(STR("foo"))) {
-      t->message = STR("Key not created");
-      break;
-    }
-    if (!dto->getProperty(STR("foo"),String()).equals(STR("bar"))) {
-      t->message = STR("Incorrect value for key");
-      break;
-    }
-    dto->setProperty(STR("foo"),STR("updatedBar"));
-    if (!dto->getProperty(STR("foo"),String()).equals(STR("updatedBar"))) {
-      t->message = STR("Failed to update value of key");
-      break;
-    }
-    if (!dto->getProperty("abc","def").equals(STR("def"))) {
-      t->message = STR("Default value not returned");
-      break;
-    }
-    dto->removeProperty(STR("foo"));
-    if (dto->containsKey(STR("foo"))) {
-      t->message = STR("Remove property failed");
-      break;
-    }
-    t->success = true;
-  } while (false);
-  delete dto;
-}
-
-void testIteratorUntyped(TestInvocation* t) {
-  t->name = String(F("Iterator operations (untyped DTO)"));
-  StreamableDTO* dto = new StreamableDTO();
-  do {
-    dto->setProperty(STR("foo"), STR("bar"));
-    dto->setProperty(STR("abc"), STR("123"));
-    uint8_t keyCount = 0;
-
-    SimpleVector<String> keys = dto->getKeys();
-    if (keys.size() != 2) {
-      t->message = STR("Expected 2 keys but got ") + String(keys.size());
-      break;
-    }
-
-
-    for (StreamableDTO::KVIterator it = dto->begin(); it != dto->end(); ++it) {
-      String key = it.key();
-      Serial.println("key: '" + key + "'");
-      if (!key.equals(STR("foo")) && !key.equals(STR("abc"))) {
-        t->message = STR("Unexpected key in iterator: '") + key + STR("'");
-        goto end_tests;
-      }
-      keyCount++;
-    }
-    if (keyCount != 2) {
-      t->message = STR("Expected 2 keys but got ") + keyCount;
-      break;
-    }
-    t->success = true;
-  } while (false);
-  end_tests:
-  delete dto;
-}
 
 void testLoadUntypedStreamableDTO(TestInvocation* t) {
   t->name = STR("Load untyped StreamableDTO");
   String data = STR("foo=bar\nabc=def\n");
   StringStream ss(data);
   StreamableDTO* dto = new StreamableDTO();
-  streamMgr.load(&ss, dto);
   do {
-    if (!dto->containsKey(STR("foo")) || !dto->containsKey(STR("abc"))) {
+    if (!streamMgr.load(&ss, dto)) {
+      t->message = STR("DTO load failed");
+      break;
+    }
+    if (!dto->exists("foo") || !dto->exists("abc")) {
       t->message = STR("Missing key(s)");
       break;
     }
-    if (!dto->getProperty(STR("foo"),String()).equals(STR("bar"))
-        || !dto->getProperty(STR("abc"),String()).equals(STR("def"))) {
+    if (strcmp(dto->get("foo"),"bar") != 0
+        || strcmp(dto->get("abc"), "def") != 0) {
       t->message = STR("Unexpected values for keys");
       break;
     }
@@ -122,13 +58,16 @@ void testLoadLongLine(TestInvocation* t) {
   StreamableDTO* dto = new StreamableDTO();
   streamMgr.load(&ss, dto);
   do {
-    if (!dto->containsKey(STR("foo")) || !dto->containsKey(STR("abc"))) {
+    if (!dto->exists("foo") || !dto->exists("abc")) {
       t->message = STR("Missing key(s)");
       break;
     }
-    if (!dto->getProperty(STR("foo"),String()).equals(STR("bar"))
-        || !dto->getProperty(STR("abc"),String()).equals(longValue)) {
-      t->message = STR("Unexpected values for keys");
+    if (strcmp(dto->get("foo"),"bar") != 0) {
+      t->message = STR("Unexpected values for key 'foo'");
+      break;
+    }
+    if (String(dto->get("abc")).length() > 60) {
+      t->message = STR("Values for key 'abc' should have been truncated");
       break;
     }
     t->success = true;
@@ -142,11 +81,22 @@ void testSendUntypedStreamableDTO(TestInvocation* t) {
   StringStream src(data);
   StringStream dest;
   StreamableDTO* dto = new StreamableDTO();
-  streamMgr.load(&src, dto);
-  streamMgr.send(&dest, dto);
   do {
-    if (!dest.getString().equals(data)) {
-      t->message = STR("Stream does not match original");
+    if (!streamMgr.load(&src, dto)) {
+      t->message = STR("DTO load failed");
+      break;
+    }
+  streamMgr.send(&dest, dto);
+    if (dest.getString().length() != data.length()) {
+      t->message = STR("Output length does not match input");
+      break;
+    }
+    if (dest.getString().indexOf(STR("foo=bar")) == -1) {
+      t->message = STR("foo=bar missing from output");
+      break;
+    }
+    if (dest.getString().indexOf(STR("abc=def")) == -1) {
+      t->message = STR("abc=def missing from output");
       break;
     }
     t->success = true;
@@ -164,23 +114,47 @@ void testLoadTypedStreamableDTO(TestInvocation* t) {
       t->message = STR("Failed to load MyTypedDTO");
       break;
     }
-    uint8_t keyCount = 0;
-    for (StreamableDTO::KVIterator it = dto->begin(); it != dto->end(); ++it) {
-      String key = it.key();
-      if (!key.equals(STR("foo")) && !key.equals(STR("abc"))) {
-        t->message = STR("Unexpected key in iterator");
-        goto end_tests;
-      }
-      keyCount++;
+    if (!dto->exists("foo") || !dto->exists("abc")) {
+      t->message = STR("Missing key(s)");
+      break;
     }
-    if (keyCount != 2) {
-      t->message = STR("Expected 2 keys but got ") + keyCount;
+    if (strcmp(dto->get("foo"),"bar") != 0
+        || strcmp(dto->get("abc"), "def") != 0) {
+      t->message = STR("Unexpected values for keys");
       break;
     }
     t->success = true;
   } while (false);
-  end_tests:
   delete dto;
+}
+
+void testSendTypedStreamableDTO(TestInvocation* t) {
+  t->name = STR("Send typed StreamableDTO");
+  MyTypedDTO dtoSent;
+  dtoSent.put("foo", "bar");
+  dtoSent.put("abc", "def");
+  StringStream dest;
+  streamMgr.send(&dest, &dtoSent);
+  String sentDto = dest.getString();
+  StringStream src(sentDto);
+  StreamableDTO* dtoRcvd = streamMgr.load(&src, typeMapper);
+  do {
+    if (!dtoRcvd) {
+      t->message = STR("Failed to load MyTypedDTO");
+      break;
+    }
+    if (!dtoRcvd->exists("foo") || !dtoRcvd->exists("abc")) {
+      t->message = STR("Missing key(s)");
+      break;
+    }
+    if (strcmp(dtoRcvd->get("foo"),"bar") != 0
+        || strcmp(dtoRcvd->get("abc"), "def") != 0) {
+      t->message = STR("Unexpected values for keys");
+      break;
+    }
+    t->success = true;
+  } while (false);
+  delete dtoRcvd;
 }
 
 void testLoadIncorrectType(TestInvocation* t) {
@@ -255,12 +229,11 @@ void setup() {
   Serial.println(F("Starting StreamableDTO tests..."));
 
   void (*tests[])(TestInvocation*) = {
-    testPropertyOperations,
-    testIteratorUntyped,
     testLoadUntypedStreamableDTO,
     testLoadLongLine,
     testSendUntypedStreamableDTO,
     testLoadTypedStreamableDTO,
+    testSendTypedStreamableDTO,
     testLoadIncorrectType,
     testLoadIncompatibleVersion
   };

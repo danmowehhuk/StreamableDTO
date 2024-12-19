@@ -14,6 +14,7 @@
 class StreamableDTO {
 
   private:
+    StreamableDTO(const StreamableDTO &t) = delete;
     friend class HashtableTestHelper; // test/HashtableTest/HashtableTestHelper.h
 
     /*
@@ -162,25 +163,32 @@ class StreamableDTO {
       return true;
     };
 
-//     bool checkTypeAndVersion(uint16_t streamTypeId, uint8_t streamMinCompatVersion) {
-//       if (getTypeId() != streamTypeId) {
-// #if defined(DEBUG)
-//         Serial.println(String(F("ERROR: Type mismatch! Can't load DTO typeId=")) 
-//             + streamTypeId + " into typeId=" + getTypeId());
-// #endif
-//         return false;
-//       }
-//       if (getSerialVersion() < minCompatVersionId) {
-// #if defined(DEBUG)
-//         Serial.println(String(F("ERROR: Incompatible version for DTO typeId=")) 
-//               + getTypeId() + String(F(", have DTO v")) + getSerialVersion() 
-//               + String(F(" but stream requires >=v"))
-//               + minCompatVersionId);
-// #endif
-//         return false;
-//       }
-//       return true;
-//     };
+    struct MetaInfo {
+      int16_t typeId;
+      uint8_t minCompatVersion;
+      MetaInfo(int16_t typeId, uint8_t minCompatVersion): 
+            typeId(typeId), minCompatVersion(minCompatVersion) {};
+    };
+
+    bool isCompatibleTypeAndVersion(MetaInfo* meta) {
+      if (getTypeId() != meta->typeId) {
+#if defined(DEBUG)
+        Serial.println(String(F("ERROR: Type mismatch! Can't load DTO typeId=")) 
+            + meta->typeId + " into typeId=" + getTypeId());
+#endif
+        return false;
+      }
+      if (getSerialVersion() < meta->minCompatVersion) {
+#if defined(DEBUG)
+        Serial.println(String(F("ERROR: Incompatible version for DTO typeId=")) 
+              + getTypeId() + String(F(", have DTO v")) + getSerialVersion() 
+              + String(F(" but stream requires >=v"))
+              + meta->minCompatVersion);
+#endif
+        return false;
+      }
+      return true;
+    };
 
 
   public:
@@ -195,12 +203,6 @@ class StreamableDTO {
         clear();
         delete[] _table;
     };
-
-    // struct KeyValuePair {
-    //   const char* key;
-    //   const char* value;
-    //   KeyValuePair* next;
-    // };
 
     /*
      * Puts a key-value pair in the table. If the key already exists,
@@ -322,12 +324,47 @@ class StreamableDTO {
   protected:
     friend class StreamableManager;
 
+    virtual int16_t getTypeId()          {  return -1; };
+    virtual uint8_t getSerialVersion()    {  return 0;  };
+    virtual uint8_t getMinCompatVersion() {  return 0;  };
+
+    /*
+     * Does something with the line of text produced by converting an Entry
+     * into a String. StreamableManager prints these lines to a destination
+     * stream, for example.
+     *
+     * Return true if successful
+     */
+    typedef bool (*LineHandlerFunction)(const String& line, void* capture);
+
+    /*
+     * Iterate through all the Entry's in the table and convert each to a
+     * key=value formatted String, which is then passed to the lineHandler.
+     * Returns true if all the Entry's were successfully converted and 
+     * handled.
+     */
+    bool entriesToLines(LineHandlerFunction lineHandler, void* capture = nullptr) {
+      for (int i = 0; i < _tableSize; ++i) {
+        Entry* entry = _table[i];
+        while (entry != nullptr) {
+          bool keyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
+          bool valPmem = (entry->type == PMEM_VALUE || entry->type == PMEM_KEY_VALUE);
+          String line = toLine(entry->key, entry->value, keyPmem, valPmem);
+          if (!lineHandler(line, capture)) {
+            return false;
+          }
+          entry = entry->next;
+        }
+      }
+      return true;
+    };
+
     /*
      * Default implementation parses a key=value format line. 
-     * If there is no =, value is an empty string
+     * If there is no =, value is an empty string. Returns false if
+     * parsing fails.
      */
-    virtual void parseLine(uint16_t lineNumber, const String &line) {
-      if (lineNumber == 0 && parseMetaLine(line)) return;
+    virtual bool parseLine(uint16_t lineNumber, const String &line) {
       String key = line;
       String value;
       int separatorIndex = line.indexOf('=');
@@ -338,25 +375,25 @@ class StreamableDTO {
         value.trim();
       }
       parseValue(lineNumber, key, value);
+      return true;
     };
 
     /* 
      * Parses the special meta line containing typeId and minCompatVersion, verifying
      * compatibility. Returns false of the provided line is not a meta line
      */
-    bool parseMetaLine(const String &metaLine) {
-      // String typeIdKey(pgmToString(StreamableDTOStrings::META_KEY));
-      // String minVerIdKey(pgmToString(StreamableDTOStrings::META_SEP));
-      // int typeIdIdx = metaLine.indexOf(typeIdKey);
-      // int minVerIdIdx = metaLine.indexOf(minVerIdKey);
-      // if (typeIdIdx != -1) {
-      //   uint16_t typeId = metaLine.substring(typeIdIdx + typeIdKey.length()).toInt();
-      //   uint8_t minCompatVersionId = metaLine.substring(minVerIdIdx + minVerIdKey.length()).toInt();
-      //   checkTypeAndVersion(typeId, minCompatVersionId);
-      //   return true;
-      // }
+    static MetaInfo* parseMetaLine(const String &metaLine) {
+      String typeIdKey(String(F("__tvid")));
+      String minVerIdKey(String(F("|")));
+      int typeIdIdx = metaLine.indexOf(typeIdKey);
+      int minVerIdIdx = metaLine.indexOf(minVerIdKey);
+      if (typeIdIdx != -1) {
+        int16_t typeId = metaLine.substring(typeIdIdx + typeIdKey.length() + 1).toInt();
+        uint8_t minCompatVersion = metaLine.substring(minVerIdIdx + minVerIdKey.length()).toInt();
+        return new MetaInfo(typeId, minCompatVersion);
+      }
       // not a meta line
-      return false;
+      return nullptr;
     };
 
     /*
@@ -367,10 +404,12 @@ class StreamableDTO {
     };
 
     /*
-     * Default implementation returns "key=value\n"
+     * Default implementation returns "key=value"
      */
-    virtual String toLine(const String& key, const String& value) {
-      return key + "=" + value;
+    virtual String toLine(const char* key, const char* value, bool keyPmem, bool valPmem) {
+      String k = keyPmem ? String(reinterpret_cast<const __FlashStringHelper *>(key)) : String(key);
+      String v = valPmem ? String(reinterpret_cast<const __FlashStringHelper *>(value)) : String(value);
+      return k + "=" + v;
     };
 
 
