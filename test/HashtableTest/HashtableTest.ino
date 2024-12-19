@@ -1,4 +1,4 @@
-#include "strdto_internal/Hashtable.h"
+#include "StreamableDTO.h"
 #include "HashtableTestHelper.h"
 
 #define STR(s) String(F(s))
@@ -14,12 +14,12 @@ HashtableTestHelper helper;
 static const char PMEM_KEY[]   PROGMEM = "myKey";
 static const char PMEM_KEY2[]  PROGMEM = "myKey";
 static const char REGMEM_KEY[]         = "myKey";
-static const char PMEM_VAL[]   PROGMEM = "myVal";
-static const char REGMEM_VAL[]         = "myVal";
+static const char PMEM_VAL[]   PROGMEM = "myVal-pmem";
+static const char REGMEM_VAL[]         = "myVal-regm";
 
 void testDefaultConstructor(TestInvocation* t) {
   t->name = STR("Default constructor");
-  Hashtable table;
+  StreamableDTO table;
   do {
     if (helper.getTableSize(&table) != 8) {
       t->message = STR("Incorrect starting size");
@@ -35,7 +35,7 @@ void testDefaultConstructor(TestInvocation* t) {
 
 void testInitialSizeConstructor(TestInvocation* t) {
   t->name = STR("Initial size constructor");
-  Hashtable table(32, 0.9);
+  StreamableDTO table(32, 0.9);
   do {
     if (helper.getTableSize(&table) != 32) {
       t->message = STR("Incorrect starting size");
@@ -51,7 +51,7 @@ void testInitialSizeConstructor(TestInvocation* t) {
 
 void testHashFunction(TestInvocation* t) {
   t->name = STR("Hash function");
-  Hashtable table;
+  StreamableDTO table;
   int oneHash = helper.hash(&table, REGMEM_KEY, false);
   do {
     if (oneHash != helper.hash(&table, PMEM_KEY, true)) {
@@ -64,7 +64,7 @@ void testHashFunction(TestInvocation* t) {
 
 void testKeyMatch(TestInvocation* t) {
   t->name = STR("Key matcher");
-  Hashtable table;
+  StreamableDTO table;
   do {
     if (!helper.keyMatches(&table, REGMEM_KEY, false, PMEM_KEY, PMEM_VAL, true, true)) {
       t->message = STR("Reg mem key didn't match PROGMEM entry->key");
@@ -88,7 +88,7 @@ void testKeyMatch(TestInvocation* t) {
 
 void testPut(TestInvocation* t) {
   t->name = STR("Put new and existing key");
-  Hashtable table;
+  StreamableDTO table;
   do {
     table.put(PMEM_KEY, PMEM_VAL, true, true);
     table.put(PMEM_KEY, REGMEM_VAL, true, false); // update
@@ -107,7 +107,7 @@ void testPut(TestInvocation* t) {
 
 void testExists(TestInvocation* t) {
   t->name = STR("Check key existence");
-  Hashtable table;
+  StreamableDTO table;
   do {
     table.put(PMEM_KEY, PMEM_VAL, true, true);
     if (!table.exists(PMEM_KEY, true)) {
@@ -129,9 +129,10 @@ void testExists(TestInvocation* t) {
 
 void testGet(TestInvocation* t) {
   t->name = STR("Get raw value pointer for key");
-  Hashtable table;
+  StreamableDTO table;
   do {
-    table.put(PMEM_KEY, REGMEM_VAL, true, false);
+    table.put(PMEM_KEY, PMEM_VAL, true, true);
+    table.put(PMEM_KEY, REGMEM_VAL, true, false); // update
     table.put("foo", "bar");
     if (!helper.verifyEntryCount(&table, 2)) {
       t->message = STR("Hashtable entry count should be 2");
@@ -151,11 +152,11 @@ void testGet(TestInvocation* t) {
       t->message = STR("Both gets should have returned same value");
       break;
     }
-    if (val1 != REGMEM_VAL) {
+    if (strcmp(val1, REGMEM_VAL) != 0) {
       t->message = STR("Get returned incorrect value");
       break;
     }
-    if (table.get("foo") != "bar") {
+    if (strcmp(table.get("foo"), "bar") != 0) {
       t->message = STR("Get 'foo' returned incorrect value");
       break;
     }
@@ -169,7 +170,7 @@ void testGet(TestInvocation* t) {
 
 void testRemove(TestInvocation* t) {
   t->name = STR("Remove key from hashtable");
-  Hashtable table;
+  StreamableDTO table;
   do {
     table.put("abc","def");
     table.put("ghi","jkl");
@@ -192,7 +193,7 @@ void testRemove(TestInvocation* t) {
 
 void testClear(TestInvocation* t) {
   t->name = STR("Clear all entries");
-  Hashtable table;
+  StreamableDTO table;
   do {
     table.put("abc","def");
     table.put("ghi","jkl");
@@ -213,7 +214,7 @@ void testClear(TestInvocation* t) {
 
 void testResize(TestInvocation* t) {
   t->name = STR("Resize table up and down");
-  Hashtable table(4); // use a smaller table
+  StreamableDTO table(4); // use a smaller table
   do {
     if (helper.getTableSize(&table) != 4) {
       t->message = STR("Table size should be 4");
