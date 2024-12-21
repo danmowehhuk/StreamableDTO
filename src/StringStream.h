@@ -15,27 +15,33 @@ class StringStream : public Stream {
     size_t write(uint8_t byte) override {
       _str += (char)byte;
       return 1;
-    }
+    };
     int available() override {
       return _pos < _str.length();
-    }
+    };
     int availableForWrite() override {
       return _outStream ? INT8_MAX : 0;
-    }
+    };
     int read() override {
       if (_pos >= _str.length()) return -1;
       return _str[_pos++];
-    }
+    };
     int peek() override {
       if (_pos >= _str.length()) return -1;
       return _str[_pos];
-    }
+    };
     void flush() override {
       _pos = _str.length();  // Move to the end of the string
-    }
+    };
     String getString() {
       return _str;
-    }
+    };
+    void reset() {
+      if (_outStream) {
+        _str = *new String();
+      }
+      _pos = 0;
+    };
 
   private:
     String& _str;

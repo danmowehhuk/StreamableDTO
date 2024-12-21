@@ -1,6 +1,6 @@
-#include <StreamableDTO.h>
 #include <StreamableManager.h>
 #include <StringStream.h>
+#include "Book.h"
 
 /*
  * This StringStream could be replaced with any kind of Stream,
@@ -14,12 +14,12 @@ void setup() {
   while (!Serial);
 
   StreamableManager streamMgr;
-  StreamableDTO book;
+  Book book;
 
   streamMgr.load(&stream, &book);
 
-  Serial.println("Loaded '" + String(book.get("name")) + "'");
-  Serial.println("This book has " + String(book.get("pages")) + " pages");
+  Serial.println("Loaded '" + book.getName() + "'");
+  Serial.println("This book has " + String(book.getPageCount()) + " pages");
   Serial.println("\nStreaming book to Serial:");
   streamMgr.send(&Serial, &book);
 }

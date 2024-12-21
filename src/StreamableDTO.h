@@ -2,6 +2,8 @@
 #define _strdto_StreamableDTO_h
 
 
+#include <Arduino.h>
+
 /*
  * A collection of arbitrary key-value pairs that is accessible with
  * hashtable semantics, but can also be serialized/deserialized from 
@@ -11,6 +13,8 @@
  * and values. Either the key, value or both may be located in PROGMEM. Any
  * non-PROGMEM char*'s must be null-terminated.
  */
+static const char _STREAMABLEDTO_EMPTY_VAL[] PROGMEM = "";
+
 class StreamableDTO {
 
   private:
@@ -242,6 +246,34 @@ class StreamableDTO {
     };
 
     /*
+     * Convenience method for PROGMEM keys and non-PROGMEM String values
+     */
+    bool put(const char* key, const String& value) {
+      return put(key, value.c_str(), true, false);
+    }
+
+    /*
+     * Convenience method for non-PROGMEM String keys and values
+     */
+    bool put(const String& key, const String& value) {
+      return put(key.c_str(), value.c_str(), false, false);
+    }
+
+    /*
+     * Stores a key with an empty value
+     */
+    bool putEmpty(const char* key, bool pmemKey) {
+      return put(key, _STREAMABLEDTO_EMPTY_VAL, pmemKey, true);
+    };
+
+    /*
+     * Convenience method for non-PROGMEM String key
+     */
+    bool putEmpty(const String& key) {
+      return put(key.c_str(), _STREAMABLEDTO_EMPTY_VAL, false, true);
+    };
+
+    /*
      * Checks if a key exists in the table.
      */
     bool exists(const char* key, bool keyPmem = false) const {
@@ -254,6 +286,13 @@ class StreamableDTO {
         entry = entry->next;
       }
       return false;
+    };
+
+    /*
+     * Convenience method for non-PROGMEM String key
+     */
+    bool exists(const String& key) const {
+      return exists(key.c_str(), false);
     };
 
     /*
@@ -275,6 +314,13 @@ class StreamableDTO {
       return nullptr;
     };
     
+    /*
+     * Convenience method using a non-PROGMEM String key
+     */
+    char* get(const String& key) const {
+      return get(key.c_str(), false);
+    };
+
     /*
      * Removes the entry with the given key if it exists. Returns
      * true if an entry was removed, otherwise false.
@@ -298,6 +344,13 @@ class StreamableDTO {
         current = current->next;
       }
       return false;
+    };
+
+    /*
+     * Convenience method using a non-PROGMEM String key
+     */
+    bool remove(const String& key) const {
+      return remove(key.c_str(), false);
     };
 
     /*
@@ -329,28 +382,52 @@ class StreamableDTO {
     virtual uint8_t getMinCompatVersion() {  return 0;  };
 
     /*
-     * Does something with the line of text produced by converting an Entry
-     * into a String. StreamableManager prints these lines to a destination
+     * Do something with the key and value extracted from an Entry.
+     * StreamableManager prints 'key=value' lines to a destination
      * stream, for example.
      *
      * Return true if successful
      */
-    typedef bool (*LineHandlerFunction)(const String& line, void* capture);
+    typedef bool (*EntryProcessor)(const char* key, const char* value, bool keyPmem, bool valPmem, void* capture);
+    typedef bool (*EntryProcessorStrings)(const String& key, const String& value, void* capture);
 
     /*
-     * Iterate through all the Entry's in the table and convert each to a
-     * key=value formatted String, which is then passed to the lineHandler.
-     * Returns true if all the Entry's were successfully converted and 
-     * handled.
+     * Iterate through all the Entry's in the table and pass the keys and values
+     * to the entryProcessor as raw char[]s with booleans indicating whether 
+     * they are stored in PROGMEM or regular memory. Returns true if all the 
+     * Entry's were successfully handled.
      */
-    bool entriesToLines(LineHandlerFunction lineHandler, void* capture = nullptr) {
+    bool processEntries(EntryProcessor entryProcessor, void* capture = nullptr) {
       for (int i = 0; i < _tableSize; ++i) {
         Entry* entry = _table[i];
         while (entry != nullptr) {
           bool keyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
           bool valPmem = (entry->type == PMEM_VALUE || entry->type == PMEM_KEY_VALUE);
-          String line = toLine(entry->key, entry->value, keyPmem, valPmem);
-          if (!lineHandler(line, capture)) {
+          if (!entryProcessor(entry->key, entry->value, keyPmem, valPmem, capture)) {
+            return false;
+          }
+          entry = entry->next;
+        }
+      }
+      return true;
+    };
+
+    /*
+     * Iterate through all the Entry's in the table and pass the keys and values
+     * to the entryProcessor after converting them to Strings. Returns true if all the 
+     * Entry's were successfully handled.
+     */
+    bool processEntries(EntryProcessorStrings entryProcessor, void* capture = nullptr) {
+      for (int i = 0; i < _tableSize; ++i) {
+        Entry* entry = _table[i];
+        while (entry != nullptr) {
+          bool keyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
+          bool valPmem = (entry->type == PMEM_VALUE || entry->type == PMEM_KEY_VALUE);
+          String key = keyPmem ? 
+                String(reinterpret_cast<const __FlashStringHelper *>(entry->key)) : String(entry->key);
+          String value = valPmem ? 
+                String(reinterpret_cast<const __FlashStringHelper *>(entry->value)) : String(entry->value);
+          if (!entryProcessor(key, value, capture)) {
             return false;
           }
           entry = entry->next;

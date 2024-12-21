@@ -151,12 +151,19 @@ class StreamableManager {
         metaLine += String(dto->getMinCompatVersion());
         sendWithFlowControl(metaLine, dest);
       }
-      auto lineHandler = [](const String& line, void* capture) -> bool {
-        Stream* dest = static_cast<Stream*>(capture);
-        sendWithFlowControl(line, dest);
+      struct Capture {
+        Stream* dest;
+        StreamableDTO* dto;
+        Capture(Stream* dest, StreamableDTO* dto): dest(dest), dto(dto) {};
+      };
+      Capture capture(dest, dto);
+      auto entryProcessor = [](const char* key, const char* value, bool keyPmem, bool valPmem, void* capture) -> bool {
+        Capture* c = static_cast<Capture*>(capture);
+        String line = c->dto->toLine(key, value, keyPmem, valPmem);
+        sendWithFlowControl(line, c->dest);
         return true;
       };
-      dto->entriesToLines(lineHandler, dest);
+      dto->processEntries(entryProcessor, &capture);
     };
 
     // Wraps a raw stream providing null checking and flow control
