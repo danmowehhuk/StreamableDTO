@@ -139,7 +139,9 @@ class StreamableManager {
       return dto;
     };
     
-    // Streams the contents of the provided DTO to a stream
+    /*
+     * Streams the contents of the provided DTO to a stream
+     */
     void send(Stream* dest, StreamableDTO* dto) {
       if (dto->getTypeId() != -1) {
         String metaLine(String(F("__tvid")));
