@@ -48,28 +48,28 @@ class StreamableDTO {
     struct Entry {
       EntryMemoryType type;
       const char* key;
-      const char* value;
+      char* value;
       Entry* next;
       Entry(EntryMemoryType type, const char* k, const char* v):
           type(type), key(nullptr), value(nullptr), next(nullptr) {
         if (type == PMEM_VALUE || type == NON_PMEM) {
           key = new char[strlen(k) + 1];
           strcpy(key, k);
-        } else {
-          key = k; 
+        } else if (type == PMEM_KEY || type == PMEM_KEY_VALUE) {
+          key = k; // PROGMEM: No allocation, just store the pointer
         }
         if (type == PMEM_KEY || type == NON_PMEM) {
           value = new char[strlen(v) + 1];
           strcpy(value, v);
-        } else {
-          value = v; 
+        } else if (type == PMEM_VALUE || type == PMEM_KEY_VALUE) {
+          value = const_cast<char*>(v); // PROGMEM: No allocation, just store the pointer
         }
       };
       ~Entry() {
-        if (type == PMEM_VALUE || type == NON_PMEM) {
+        if (type == PMEM_VALUE || type == NON_PMEM && key) {
           delete[] key;
         }
-        if (type == PMEM_KEY || type == NON_PMEM) {
+        if (type == PMEM_KEY || type == NON_PMEM && value) {
           delete[] value;
         }
       };

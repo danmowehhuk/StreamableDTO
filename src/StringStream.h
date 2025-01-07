@@ -10,8 +10,8 @@
 class StringStream : public Stream {
 
   public:
-    StringStream(String& str) : _str(str), _pos(0), _outStream(false) {}
-    StringStream() : _str(*new String()), _pos(0), _outStream(true) {}
+    StringStream(const String& str) : _str(str), _pos(0), _outStream(false) {};
+    StringStream() : _str(String()), _pos(0), _outStream(true) {};
     size_t write(uint8_t byte) override {
       _str += (char)byte;
       return 1;
@@ -38,13 +38,13 @@ class StringStream : public Stream {
     };
     void reset() {
       if (_outStream) {
-        _str = *new String();
+        _str = String();
       }
       _pos = 0;
     };
 
   private:
-    String& _str;
+    String _str;
     size_t _pos;
     bool _outStream;
 
