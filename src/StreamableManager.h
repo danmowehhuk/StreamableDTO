@@ -25,15 +25,17 @@ class StreamableManager {
      * Reads characters from a Stream until a terminator character or the max
      * buffer size is reached (a newline is the default terminator).
      */
-    String readStringLine(Stream* s, char terminator = '\n') {
-      char buffer[_bufferBytes];
+    char* readLine(Stream* s, char terminator = '\n') {
+      char* buffer = new char[_bufferBytes]();
       uint8_t i = 0;
       while (s->available()) {
         char c = s->read();
         if (c == terminator || i >= _bufferBytes - 1) {
 #if defined(DEBUG)
           if (i >= _bufferBytes - 1) {
-            Serial.println(String(F("readStringLine: line truncated to ")) + _bufferBytes + String(F(" chars")));
+            Serial.print(F("readLine: line truncated to "));
+            Serial.print(_bufferBytes);
+            Serial.println(F(" chars"));
           }
 #endif
           break;
@@ -41,23 +43,49 @@ class StreamableManager {
         buffer[i++] = c;
       }
       buffer[i] = '\0';
-      String str(buffer);
-      str.trim();
-      return str;
+
+      // Trim leading and trailing whitespace
+      char* start = buffer;
+      while (isspace(*start)) start++;
+      char* end = start + strlen(start) - 1;
+      while (end > start && isspace(*end)) *end-- = '\0';
+      if (start != buffer) {
+        // Allocate a new trimmed string
+        size_t len = strlen(start);
+        char* trimmed = new char[len + 1];
+        strncpy(trimmed, start, len);
+        trimmed[len] = '\0';
+        delete[] buffer;
+        return trimmed;
+      }
+      return buffer;
     };
 
     /*
-     * Sends a String to the destination Stream. A newline character is 
+     * Sends a string to the destination Stream. A newline character is 
      * sent automatically. This method waits until the destination stream
      * has space in its buffer before sending the next char.
      */
-    static void sendWithFlowControl(const String &line, Stream* dest) {
-      for (size_t i = 0; i < line.length(); i++) {
+    static void sendWithFlowControl(const char* line, Stream* dest) {
+      for (size_t i = 0; i < strlen(line); i++) {
         while (dest->availableForWrite() == 0) {} // wait
         dest->write(line[i]);
       }
       while (dest->availableForWrite() == 0) {}
       dest->write('\n');
+    };
+
+    static void sendMetaLine(StreamableDTO* dto, Stream* dest) {
+      constexpr size_t keyLen = 6;
+      char key[keyLen + 1];
+      strcpy_P(key, PSTR("__tvid"));
+      constexpr size_t totalLen = keyLen + 1 + 5 + 1 + 3 + 1; // "__tvid=65535|255\0"
+      char metaLine[totalLen];
+      const uint16_t typeId = dto->getTypeId();
+      const uint8_t minCompat = dto->getMinCompatVersion();
+      static const char format[] PROGMEM = "%s=%u|%u";
+      snprintf_P(metaLine, totalLen, format, key, typeId, minCompat);
+      sendWithFlowControl(metaLine, dest);
     };
 
   public:
@@ -81,7 +109,7 @@ class StreamableManager {
     bool load(Stream* src, StreamableDTO* dto, uint16_t lineNumStart = 0) {
       uint16_t lineNumber = lineNumStart;
       while (src->available()) {
-        String line = readStringLine(src);
+        char* line = readLine(src);
         if (lineNumber == 0) {
           StreamableDTO::MetaInfo* meta = dto->parseMetaLine(line);
           if (meta) {
@@ -90,13 +118,16 @@ class StreamableManager {
               lineNumber++;
               continue;
             } else {
+              if (line) free(line);
               return false; // incompatible type or version
             }
           }
         }
         if (!dto->parseLine(lineNumber++, line)) {
+          if (line) free(line);
           return false;
         }
+        if (line) free(line);
       }
       return true;
     };
@@ -110,11 +141,12 @@ class StreamableManager {
      *       for reclaiming the DTO's memory
      */
     StreamableDTO* load(Stream* src, TypeMapper typeMapper) {
-      String metaLine;
+      char* metaLine;
       if (src->available()) {
-        metaLine = readStringLine(src);
+        metaLine = readLine(src);
       }
       StreamableDTO::MetaInfo* meta = StreamableDTO::parseMetaLine(metaLine);
+      if (metaLine) free(metaLine);
       if (!meta) {
 #if defined(DEBUG)
         Serial.println(F("ERROR: Could not determine type from stream"));
@@ -124,8 +156,10 @@ class StreamableManager {
       StreamableDTO* dto = typeMapper(meta->typeId);
       if (!dto) {
 #if defined(DEBUG)
-        Serial.println(String(F("ERROR: Unknown typeId: ")) + String(meta->typeId));
+        Serial.print(F("ERROR: Unknown typeId: "));
+        Serial.println(meta->typeId);
 #endif
+        delete meta;      
         return nullptr;        
       }
       if (dto->isCompatibleTypeAndVersion(meta)) {
@@ -133,6 +167,7 @@ class StreamableManager {
       } else {
         // Incorrect type or incompatible version
         delete dto;
+        delete meta;      
         return nullptr;
       }
       delete meta;      
@@ -144,12 +179,7 @@ class StreamableManager {
      */
     void send(Stream* dest, StreamableDTO* dto) {
       if (dto->getTypeId() != -1) {
-        String metaLine(String(F("__tvid")));
-        metaLine += String(F("="));
-        metaLine += String(dto->getTypeId());
-        metaLine += String(F("|"));
-        metaLine += String(dto->getMinCompatVersion());
-        sendWithFlowControl(metaLine, dest);
+        sendMetaLine(dto, dest);
       }
       struct Capture {
         Stream* dest;
@@ -159,8 +189,11 @@ class StreamableManager {
       Capture capture(dest, dto);
       auto entryProcessor = [](const char* key, const char* value, bool keyPmem, bool valPmem, void* capture) -> bool {
         Capture* c = static_cast<Capture*>(capture);
-        String line = c->dto->toLine(key, value, keyPmem, valPmem);
-        sendWithFlowControl(line, c->dest);
+        char* line = c->dto->toLine(key, value, keyPmem, valPmem);
+        if (line) {
+          sendWithFlowControl(line, c->dest);
+          free(line);
+        }
         return true;
       };
       dto->processEntries(entryProcessor, &capture);
@@ -170,7 +203,7 @@ class StreamableManager {
     class DestinationStream {
       public:
         DestinationStream(Stream* dest): _dest(dest) {};
-        void println(const String &line) {
+        void println(const char* line) {
           if (_dest != nullptr) {
             StreamableManager::sendWithFlowControl(line, _dest);
           }
@@ -186,7 +219,7 @@ class StreamableManager {
      * a pointer to an object you can use to pass data into or out of the lambda.
      * Returning false terminates streaming.
      */
-    typedef bool (*FilterFunction)(const String &line, DestinationStream* dest, void* state);
+    typedef bool (*FilterFunction)(const char* line, DestinationStream* dest, void* state);
 
     /*
      * Passes data from src to dest, holding only one line in memory at a time.
@@ -195,12 +228,13 @@ class StreamableManager {
     void pipe(Stream* src, Stream* dest, FilterFunction filter = nullptr, void* state = nullptr) {
       DestinationStream out(dest);
       while (src->available()) {
-        String line = readStringLine(src);
+        char* line = readLine(src);
         if (filter == nullptr) {
           out.println(line);
         } else {
           if (!filter(line, &out, state)) break;
         }
+        if (line) free(line);
       }
     };
 

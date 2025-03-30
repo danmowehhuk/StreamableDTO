@@ -9,17 +9,16 @@
  * hashtable semantics, but can also be serialized/deserialized from 
  * an Arduino Stream via the StreamableManager class
  *
- * Stripped-down hashtable implementation that only allows char*'s for keys
- * and values. Either the key, value or both may be located in PROGMEM. Any
- * non-PROGMEM char*'s must be null-terminated.
+ * Stripped-down hashtable implementation that only allows simple char
+ * arrays for keys and values. Either the key, value or both may be 
+ * located in PROGMEM.
  */
-static const char _STREAMABLEDTO_EMPTY_VAL[] PROGMEM = "";
 
 class StreamableDTO {
 
   private:
     StreamableDTO(const StreamableDTO &t) = delete;
-    friend class HashtableTestHelper; // test/HashtableTest/HashtableTestHelper.h
+    friend class HashtableTestHelper; // test/test-suite/HashtableTestHelper.h
 
     /*
      * Indicates whether the key, value or both should be read from PROGMEM
@@ -33,17 +32,7 @@ class StreamableDTO {
       NON_PMEM
     };
 
-    EntryMemoryType getMemoryType(bool keyPmem, bool valPmem) {
-      if (keyPmem && !valPmem) {
-        return PMEM_KEY;
-      } else if (!keyPmem && valPmem) {
-        return PMEM_VALUE;
-      } else if (keyPmem && valPmem) {
-        return PMEM_KEY_VALUE;
-      } else {
-        return NON_PMEM;
-      }
-    };
+    EntryMemoryType getMemoryType(bool keyPmem, bool valPmem);
 
     struct Entry {
       EntryMemoryType type;
@@ -53,14 +42,12 @@ class StreamableDTO {
       Entry(EntryMemoryType type, const char* k, const char* v):
           type(type), key(nullptr), value(nullptr), next(nullptr) {
         if (type == PMEM_VALUE || type == NON_PMEM) {
-          key = new char[strlen(k) + 1];
-          strcpy(key, k);
+          key = strdup(k);
         } else if (type == PMEM_KEY || type == PMEM_KEY_VALUE) {
           key = k; // PROGMEM: No allocation, just store the pointer
         }
         if (type == PMEM_KEY || type == NON_PMEM) {
-          value = new char[strlen(v) + 1];
-          strcpy(value, v);
+          value = strdup(v);
         } else if (type == PMEM_VALUE || type == PMEM_KEY_VALUE) {
           value = const_cast<char*>(v); // PROGMEM: No allocation, just store the pointer
         }
@@ -91,15 +78,8 @@ class StreamableDTO {
      * caller must indicate whether the key is a pointer to PROGMEM or
      * regular memory
      */
-    int hash(const char* key, bool pmem = false) {
-      unsigned long h = 0;
-      size_t length = pmem ? strlen_P(key) : strlen(key);
-      for (size_t i = 0; i < length; i++) {
-        char c = pmem ? pgm_read_byte(key + i) : key[i];
-        h = 31 * h + c;
-      }
-      return h % _tableSize;
-    };
+    int hash(const char* key, bool pmem = false);
+    int hash(const __FlashStringHelper* key);
 
     /*
      * Once a key has been hashed to a bucket, the Entry's in that bucket
@@ -111,61 +91,13 @@ class StreamableDTO {
      * For efficiency, if both the passed key and the entry->key are in
      * PROGMEM, then only pointer equality is checked.
      */
-    bool keyMatches(const char* key, const Entry* entry, bool keyPmem) {
-      bool keysMatch = false;
-      if (keyPmem) {
-        if (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE) {
-          // key and entry->key are both in PROGMEM
-          // For efficiency, only check pointer equality
-          keysMatch = (entry->key == key);
-        } else {
-          // key in PROGMEM, entry->key in regular memory
-          size_t size = strlen_P(key) + 1;
-          char buffer[size];
-          strcpy_P(buffer, key);
-          buffer[size-1] = '\0';
-          keysMatch = (strcmp(entry->key, buffer) == 0);
-        }
-      } else {
-        if (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE) {
-          // key in regular memory, entry->key in PROGMEM
-          size_t size = strlen_P(entry->key) + 1;
-          char buffer[size];
-          strcpy_P(buffer, entry->key);
-          buffer[size-1] = '\0';
-          keysMatch = (strcmp(buffer, key) == 0);
-        } else {
-          // key and entry->key are both in regular memory
-          keysMatch = (strcmp(entry->key, key) == 0);
-        }
-      }
-      return keysMatch;
-    };
+    bool keyMatches(const char* key, const Entry* entry, bool keyPmem);
+    bool keyMatches(const __FlashStringHelper* key, const Entry* entry);
 
     /*
      * Resize the table, rehashing all keys to redistribute entries.
      */
-    bool resize(int newSize) {
-      Entry** newTable = new Entry*[newSize]();
-      if (!newTable) {
-        return false;
-      }
-      for (int i = 0; i < _tableSize; ++i) {
-        Entry* entry = _table[i];
-        while (entry) {
-          Entry* next = entry->next;
-          bool pmemKey = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
-          int index = hash(entry->key, pmemKey) % newSize;
-          entry->next = newTable[index];
-          newTable[index] = entry;
-          entry = next;
-        }
-      }
-      delete[] _table;
-      _table = newTable;
-      _tableSize = newSize;
-      return true;
-    };
+    bool resize(int newSize);
 
     struct MetaInfo {
       int16_t typeId;
@@ -174,126 +106,34 @@ class StreamableDTO {
             typeId(typeId), minCompatVersion(minCompatVersion) {};
     };
 
-    bool isCompatibleTypeAndVersion(MetaInfo* meta) {
-      if (getTypeId() != meta->typeId) {
-#if defined(DEBUG)
-        Serial.println(String(F("ERROR: Type mismatch! Can't load DTO typeId=")) 
-            + meta->typeId + " into typeId=" + getTypeId());
-#endif
-        return false;
-      }
-      if (getSerialVersion() < meta->minCompatVersion) {
-#if defined(DEBUG)
-        Serial.println(String(F("ERROR: Incompatible version for DTO typeId=")) 
-              + getTypeId() + String(F(", have DTO v")) + getSerialVersion() 
-              + String(F(" but stream requires >=v"))
-              + meta->minCompatVersion);
-#endif
-        return false;
-      }
-      return true;
-    };
+    bool isCompatibleTypeAndVersion(MetaInfo* meta);
 
 
   public:
-    StreamableDTO() : _tableSize(INITIAL_TABLE_SIZE), _count(0) {
-      _table = new Entry*[_tableSize]();
-    };
-    StreamableDTO(size_t initialCapacity, float loadFactor = 0.7) 
-        : _tableSize(initialCapacity), _count(0), _loadFactorThreshold(loadFactor) {
-      _table = new Entry*[_tableSize]();
-    };
-    virtual ~StreamableDTO() {
-        clear();
-        delete[] _table;
-    };
+    StreamableDTO();
+    StreamableDTO(size_t initialCapacity, float loadFactor = 0.7) ;
+    virtual ~StreamableDTO();
 
     /*
      * Puts a key-value pair in the table. If the key already exists,
      * update the value. Resize the table if necessary.
      */
-    bool put(const char* key, const char* value, bool keyPmem = false, bool valPmem = false) {
-      int index = hash(key, keyPmem);
-      Entry* entry = _table[index];
-      while (entry != nullptr) {
-        if (keyMatches(key, entry, keyPmem)) {
-          if (entry->type == PMEM_KEY || entry->type == NON_PMEM) {
-            delete[] entry->value;
-          }
-          if (valPmem) {
-            entry->value = value;
-          } else {
-            entry->value = new char[strlen(value) + 1];
-            strcpy(entry->value, value);
-          }
-          bool existingKeyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
-          entry->type = getMemoryType(existingKeyPmem, valPmem);
-          return true;
-        }
-        entry = entry->next;
-      }
-      EntryMemoryType type = getMemoryType(keyPmem, valPmem);
-      Entry* newEntry = new Entry(type, key, value);
-      newEntry->next = _table[index];
-      _table[index] = newEntry;
-      _count++;
-      if (static_cast<float>(_count) / _tableSize > _loadFactorThreshold) {
-        if (!resize(_tableSize * 2)) {
-          return false;
-        }
-      }
-      return true;
-    };
-
-    /*
-     * Convenience method for PROGMEM keys and non-PROGMEM String values
-     */
-    bool put(const char* key, const String& value) {
-      return put(key, value.c_str(), true, false);
-    }
-
-    /*
-     * Convenience method for non-PROGMEM String keys and values
-     */
-    bool put(const String& key, const String& value) {
-      return put(key.c_str(), value.c_str(), false, false);
-    }
-
-    /*
-     * Stores a key with an empty value
-     */
-    bool putEmpty(const char* key, bool pmemKey) {
-      return put(key, _STREAMABLEDTO_EMPTY_VAL, pmemKey, true);
-    };
-
-    /*
-     * Convenience method for non-PROGMEM String key
-     */
-    bool putEmpty(const String& key) {
-      return put(key.c_str(), _STREAMABLEDTO_EMPTY_VAL, false, true);
-    };
+    bool put(const char* key, const char* value, bool keyPmem = false, bool valPmem = false);
+    bool put(const char* key, const __FlashStringHelper* value, bool keyPmem = false);
+    bool put_P(const char* key, const char* value, bool valPmem = false);
+    bool put_P(const char* key, const __FlashStringHelper* value);
+    bool put(const __FlashStringHelper* key, const char* value, bool valPmem = false);
+    bool put(const __FlashStringHelper* key, const __FlashStringHelper* value);
+    bool putEmpty(const char* key, bool pmemKey);
+    bool putEmpty(const __FlashStringHelper* key);
+    bool putEmpty_P(const char* key);
 
     /*
      * Checks if a key exists in the table.
      */
-    bool exists(const char* key, bool keyPmem = false) const {
-      int index = hash(key, keyPmem);
-      Entry* entry = _table[index];
-      while (entry != nullptr) {
-        if (keyMatches(key, entry, keyPmem)) {
-          return true;
-        }
-        entry = entry->next;
-      }
-      return false;
-    };
-
-    /*
-     * Convenience method for non-PROGMEM String key
-     */
-    bool exists(const String& key) const {
-      return exists(key.c_str(), false);
-    };
+    bool exists(const char* key, bool keyPmem = false) const;
+    bool exists(const __FlashStringHelper* key) const;
+    bool exists_P(const char* key) const;
 
     /*
      * Gets the raw value pointer associated with the given key. The
@@ -302,77 +142,23 @@ class StreamableDTO {
      *
      * Returns a nullptr if the key is not found.
      */
-    char* get(const char* key, bool keyPmem = false) const {
-      int index = hash(key, keyPmem);
-      Entry* entry = _table[index];
-      while (entry != nullptr) {
-        if (keyMatches(key, entry, keyPmem)) {
-          return entry->value;
-        }
-        entry = entry->next;
-      }
-      return nullptr;
-    };
-    
-    /*
-     * Convenience method using a non-PROGMEM String key
-     */
-    char* get(const String& key) const {
-      return get(key.c_str(), false);
-    };
+    char* get(const char* key, bool keyPmem = false) const;
+    char* get(const __FlashStringHelper* key) const;
+    char* get_P(const char* key) const;
 
     /*
      * Removes the entry with the given key if it exists. Returns
      * true if an entry was removed, otherwise false.
      */
-    bool remove(const char* key, bool keyPmem = false) {
-      int index = hash(key, keyPmem);
-      Entry* current = _table[index];
-      Entry* prev = nullptr;
-      while (current != nullptr) {
-        if (keyMatches(key, current, keyPmem)) {
-          if (prev != nullptr) {
-            prev->next = current->next;
-          } else {
-            _table[index] = current->next;
-          }
-          delete current;
-          _count--;
-          return true;
-        }
-        prev = current;
-        current = current->next;
-      }
-      return false;
-    };
-
-    /*
-     * Convenience method using a non-PROGMEM String key
-     */
-    bool remove(const String& key) const {
-      return remove(key.c_str(), false);
-    };
+    bool remove(const char* key, bool keyPmem = false);
+    bool remove(const __FlashStringHelper* key);
+    bool remove_P(const char* key);
 
     /*
      * Removes all the entries from the table and resets it to its
      * initial size.
      */
-    bool clear() {
-      for (int i = 0; i < _tableSize; ++i) {
-        Entry* entry = _table[i];
-        while (entry != nullptr) {
-          Entry* toDelete = entry;
-          entry = entry->next;
-          delete toDelete;
-        }
-        _table[i] = nullptr;
-      }
-      _count = 0;
-      if (_tableSize > INITIAL_TABLE_SIZE) {
-        return resize(INITIAL_TABLE_SIZE);
-      }
-      return true;
-    };
+    bool clear();
 
   protected:
     friend class StreamableManager;
@@ -389,7 +175,7 @@ class StreamableDTO {
      * Return true if successful
      */
     typedef bool (*EntryProcessor)(const char* key, const char* value, bool keyPmem, bool valPmem, void* capture);
-    typedef bool (*EntryProcessorStrings)(const String& key, const String& value, void* capture);
+    // typedef bool (*EntryProcessorStrings)(const String& key, const String& value, void* capture);
 
     /*
      * Iterate through all the Entry's in the table and pass the keys and values
@@ -397,98 +183,54 @@ class StreamableDTO {
      * they are stored in PROGMEM or regular memory. Returns true if all the 
      * Entry's were successfully handled.
      */
-    bool processEntries(EntryProcessor entryProcessor, void* capture = nullptr) {
-      for (int i = 0; i < _tableSize; ++i) {
-        Entry* entry = _table[i];
-        while (entry != nullptr) {
-          bool keyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
-          bool valPmem = (entry->type == PMEM_VALUE || entry->type == PMEM_KEY_VALUE);
-          if (!entryProcessor(entry->key, entry->value, keyPmem, valPmem, capture)) {
-            return false;
-          }
-          entry = entry->next;
-        }
-      }
-      return true;
-    };
+    bool processEntries(EntryProcessor entryProcessor, void* capture = nullptr);
 
     /*
      * Iterate through all the Entry's in the table and pass the keys and values
      * to the entryProcessor after converting them to Strings. Returns true if all the 
      * Entry's were successfully handled.
      */
-    bool processEntries(EntryProcessorStrings entryProcessor, void* capture = nullptr) {
-      for (int i = 0; i < _tableSize; ++i) {
-        Entry* entry = _table[i];
-        while (entry != nullptr) {
-          bool keyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
-          bool valPmem = (entry->type == PMEM_VALUE || entry->type == PMEM_KEY_VALUE);
-          String key = keyPmem ? 
-                String(reinterpret_cast<const __FlashStringHelper *>(entry->key)) : String(entry->key);
-          String value = valPmem ? 
-                String(reinterpret_cast<const __FlashStringHelper *>(entry->value)) : String(entry->value);
-          if (!entryProcessor(key, value, capture)) {
-            return false;
-          }
-          entry = entry->next;
-        }
-      }
-      return true;
-    };
+    // bool processEntries(EntryProcessorStrings entryProcessor, void* capture = nullptr) {
+    //   for (int i = 0; i < _tableSize; ++i) {
+    //     Entry* entry = _table[i];
+    //     while (entry != nullptr) {
+    //       bool keyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
+    //       bool valPmem = (entry->type == PMEM_VALUE || entry->type == PMEM_KEY_VALUE);
+    //       String key = keyPmem ? 
+    //             String(reinterpret_cast<const __FlashStringHelper *>(entry->key)) : String(entry->key);
+    //       String value = valPmem ? 
+    //             String(reinterpret_cast<const __FlashStringHelper *>(entry->value)) : String(entry->value);
+    //       if (!entryProcessor(key, value, capture)) {
+    //         return false;
+    //       }
+    //       entry = entry->next;
+    //     }
+    //   }
+    //   return true;
+    // };
 
     /*
      * Default implementation parses a key=value format line. 
      * If there is no =, value is an empty string. Returns false if
      * parsing fails.
      */
-    virtual bool parseLine(uint16_t lineNumber, const String &line) {
-      String key = line;
-      String value;
-      int separatorIndex = line.indexOf('=');
-      if (separatorIndex != -1) {
-        key = line.substring(0, separatorIndex);
-        key.trim();
-        value = line.substring(separatorIndex + 1);
-        value.trim();
-      }
-      parseValue(lineNumber, key, value);
-      return true;
-    };
+    virtual bool parseLine(uint16_t lineNumber, const char* line);
 
     /* 
      * Parses the special meta line containing typeId and minCompatVersion, verifying
      * compatibility. Returns false of the provided line is not a meta line
      */
-    static MetaInfo* parseMetaLine(const String &metaLine) {
-      String typeIdKey(String(F("__tvid")));
-      String minVerIdKey(String(F("|")));
-      int typeIdIdx = metaLine.indexOf(typeIdKey);
-      int minVerIdIdx = metaLine.indexOf(minVerIdKey);
-      if (typeIdIdx != -1) {
-        int16_t typeId = metaLine.substring(typeIdIdx + typeIdKey.length() + 1).toInt();
-        uint8_t minCompatVersion = metaLine.substring(minVerIdIdx + minVerIdKey.length()).toInt();
-        return new MetaInfo(typeId, minCompatVersion);
-      }
-      // not a meta line
-      return nullptr;
-    };
+    static MetaInfo* parseMetaLine(const char* metaLine);
 
     /*
      * Default implementation simply puts the value in _table under "key"
      */
-    virtual void parseValue(uint16_t lineNumber, const String& key, const String& value) {
-      put(key.c_str(), value.c_str());
-    };
+    virtual void parseValue(uint16_t lineNumber, const char* key, const char* value);
 
     /*
      * Default implementation returns "key=value"
      */
-    virtual String toLine(const char* key, const char* value, bool keyPmem, bool valPmem) {
-      String k = keyPmem ? String(reinterpret_cast<const __FlashStringHelper *>(key)) : String(key);
-      String v = valPmem ? String(reinterpret_cast<const __FlashStringHelper *>(value)) : String(value);
-      return k + "=" + v;
-    };
-
+    virtual char* toLine(const char* key, const char* value, bool keyPmem, bool valPmem);
 
 };
  
