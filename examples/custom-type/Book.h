@@ -18,17 +18,17 @@ class Book: public StreamableDTO {
 
   public:
     Book(): StreamableDTO() {};
-    void setName(const String& name) {
-      put(BOOK_NAME_KEY, name); // ignoring bool return (assume succeeded)
+    void setName(const char* name) {
+      put(BOOK_NAME_KEY, name, true); // ignoring bool return (assume succeeded)
     };
     String getName() {
       return get(BOOK_NAME_KEY, true);
     };
     void setPageCount(int pageCount) {
-      put(BOOK_PAGES_KEY, String(pageCount)); // ignoring bool return (assume succeeded)
+      put(BOOK_PAGES_KEY, String(pageCount).c_str(), true); // ignoring bool return (assume succeeded)
     };
     int getPageCount() {
-      return String(get(BOOK_PAGES_KEY, true)).toInt();
+      return atoi(get(BOOK_PAGES_KEY, true));
     };
 
   protected:
@@ -36,11 +36,11 @@ class Book: public StreamableDTO {
     /*
      * Override parseValue to use the PROGMEM keys instead of raw strings
      */
-    void parseValue(uint16_t lineNumber, const String& key, const String& value) override {
-      if (strcmp_P(key.c_str(), BOOK_NAME_KEY) == 0) {
+    void parseValue(uint16_t lineNumber, const char* key, const char* value) override {
+      if (strcmp_P(key, BOOK_NAME_KEY) == 0) {
         setName(value);
-      } else if (strcmp_P(key.c_str(), BOOK_PAGES_KEY) == 0) {
-        setPageCount(value.toInt());
+      } else if (strcmp_P(key, BOOK_PAGES_KEY) == 0) {
+        setPageCount(atoi(value));
       } else {
         /*
          * Default to base implementation so that unrecognized keys are

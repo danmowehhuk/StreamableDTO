@@ -19,8 +19,7 @@ class HashtableTestHelper {
     };
     bool keyMatches(StreamableDTO* table, const char* key, bool keyPmem, const char* entryKey, const char* entryValue, 
             bool entryKeyPmem, bool entryValPmem) {
-      StreamableDTO::EntryMemoryType type = table->getMemoryType(entryKeyPmem, entryValPmem);
-      StreamableDTO::Entry* entry = new StreamableDTO::Entry(type, entryKey, entryValue);
+      StreamableDTO::Entry* entry = new StreamableDTO::Entry(entryKey, entryValue, entryKeyPmem, entryValPmem);
       bool out = table->keyMatches(key, entry, keyPmem);
       delete entry;
       return out;

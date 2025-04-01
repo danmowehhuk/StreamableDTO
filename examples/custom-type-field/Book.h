@@ -25,19 +25,19 @@ class Book: public StreamableDTO {
 
   public:
     Book(): StreamableDTO() {};
-    void setName(const String& name) {
-      put(BOOK_NAME_KEY, name); // ignoring bool return (assume succeeded)
+    void setName(const char* name) {
+      put(BOOK_NAME_KEY, name, true); // ignoring bool return (assume succeeded)
     };
     String getName() {
       return get(BOOK_NAME_KEY, true);
     };
     void setPageCount(int pageCount) {
-      put(BOOK_PAGES_KEY, String(pageCount)); // ignoring bool return (assume succeeded)
+      put(BOOK_PAGES_KEY, String(pageCount).c_str(), true); // ignoring bool return (assume succeeded)
     };
     int getPageCount() {
-      return String(get(BOOK_PAGES_KEY, true)).toInt();
+      return atoi(get(BOOK_PAGES_KEY, true));
     };
-    void setPublisher(const String& publisher) {
+    void setPublisher(const String publisher) {
       _publisher = publisher;
     };
     String getPublisher() {
@@ -55,15 +55,16 @@ class Book: public StreamableDTO {
     /*
      * Override parseValue to use the PROGMEM keys instead of raw strings
      */
-    void parseValue(uint16_t lineNumber, const String& key, const String& value) override {
-      if (strcmp_P(key.c_str(), BOOK_NAME_KEY) == 0) {
+    void parseValue(uint16_t lineNumber, const char* key, const char* value) override {
+      if (strcmp_P(key, BOOK_NAME_KEY) == 0) {
         setName(value);
-      } else if (strcmp_P(key.c_str(), BOOK_PAGES_KEY) == 0) {
-        setPageCount(value.toInt());
-      } else if (strcmp_P(key.c_str(), BOOK_META_KEY) == 0) {
-        int sepIdx = value.indexOf('|');
-        String publisher = value.substring(0, sepIdx);
-        String year = value.substring(sepIdx + 1);
+      } else if (strcmp_P(key, BOOK_PAGES_KEY) == 0) {
+        setPageCount(atoi(value));
+      } else if (strcmp_P(key, BOOK_META_KEY) == 0) {
+        String val(value);
+        int sepIdx = val.indexOf('|');
+        String publisher = val.substring(0, sepIdx);
+        String year = val.substring(sepIdx + 1);
         publisher.trim();
         setPublisher(publisher);
         year.trim();
@@ -83,13 +84,16 @@ class Book: public StreamableDTO {
     /*
      * Also override toLine to reconstruct the "meta" field
      */
-    String toLine(const char* key, const char* value, bool keyPmem, bool valPmem) override {
-      // Can use pointer equality because the "meta" key is in PROGMEM
-      if (keyPmem && key == BOOK_META_KEY) {
+    char* toLine(const char* key, const char* value, bool keyPmem, bool valPmem) override {
+      if (key == BOOK_META_KEY) {
 
         // Ignore the value param (it's empty) and reconstruct "meta" value
-        String k = String(reinterpret_cast<const __FlashStringHelper *>(key));
-        return k + "=" + getPublisher() + "|" + String(getPublishYear());
+        String k = String(reinterpret_cast<const __FlashStringHelper *>(key))
+               + "=" + getPublisher() + "|" + String(getPublishYear());
+        size_t len = k.length() + 1;  // +1 for null terminator
+        char* line = new char[len];
+        k.toCharArray(line, len);
+        return line;
 
       } else {
         /*

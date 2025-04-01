@@ -14,17 +14,16 @@ StreamableDTO::StreamableDTO(size_t initialCapacity, float loadFactor = 0.7)
   delete[] _table;
 }
 
-StreamableDTO::EntryMemoryType StreamableDTO::getMemoryType(bool keyPmem, bool valPmem) {
-  if (keyPmem && !valPmem) {
-    return PMEM_KEY;
-  } else if (!keyPmem && valPmem) {
-    return PMEM_VALUE;
-  } else if (keyPmem && valPmem) {
-    return PMEM_KEY_VALUE;
-  } else {
-    return NON_PMEM;
-  }
+StreamableDTO::Entry::Entry(const char* k, const char* v, bool keyPmem, bool valPmem):
+    key(nullptr), value(nullptr), next(nullptr), keyPmem(keyPmem), valPmem(valPmem) {
+  key = keyPmem ? k : strdup(k);
+  value = valPmem ? v : strdup(v);
 }
+
+StreamableDTO::Entry::~Entry() {
+  if (key && !keyPmem) delete[] key;
+  if (value && !valPmem) delete[] value;
+};
 
 int StreamableDTO::hash(const char* key, bool pmem = false) {
   unsigned long h = 0;
@@ -43,7 +42,7 @@ int StreamableDTO::hash(const __FlashStringHelper* key) {
 bool StreamableDTO::keyMatches(const char* key, const Entry* entry, bool keyPmem) {
   bool keysMatch = false;
   if (keyPmem) {
-    if (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE) {
+    if (entry->keyPmem) {
       // key and entry->key are both in PROGMEM
       // For efficiency, only check pointer equality
       keysMatch = (entry->key == key);
@@ -56,7 +55,7 @@ bool StreamableDTO::keyMatches(const char* key, const Entry* entry, bool keyPmem
       keysMatch = (strcmp(entry->key, buffer) == 0);
     }
   } else {
-    if (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE) {
+    if (entry->keyPmem) {
       // key in regular memory, entry->key in PROGMEM
       size_t size = strlen_P(entry->key) + 1;
       char buffer[size];
@@ -84,8 +83,7 @@ bool StreamableDTO::resize(int newSize) {
     Entry* entry = _table[i];
     while (entry) {
       Entry* next = entry->next;
-      bool pmemKey = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
-      int index = hash(entry->key, pmemKey) % newSize;
+      int index = hash(entry->key, entry->keyPmem) % newSize;
       entry->next = newTable[index];
       newTable[index] = entry;
       entry = next;
@@ -126,23 +124,18 @@ bool StreamableDTO::put(const char* key, const char* value, bool keyPmem = false
   Entry* entry = _table[index];
   while (entry != nullptr) {
     if (keyMatches(key, entry, keyPmem)) {
-      if (entry->type == PMEM_KEY || entry->type == NON_PMEM) {
-        delete[] entry->value;
-      }
+      if (!entry->valPmem) delete[] entry->value;
       if (valPmem) {
         entry->value = value;
       } else {
-        entry->value = new char[strlen(value) + 1];
-        strcpy(entry->value, value);
+        entry->value = strdup(value);
       }
-      bool existingKeyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
-      entry->type = getMemoryType(existingKeyPmem, valPmem);
+      entry->valPmem = valPmem;
       return true;
     }
     entry = entry->next;
   }
-  EntryMemoryType type = getMemoryType(keyPmem, valPmem);
-  Entry* newEntry = new Entry(type, key, value);
+  Entry* newEntry = new Entry(key, value, keyPmem, valPmem);
   newEntry->next = _table[index];
   _table[index] = newEntry;
   _count++;
@@ -276,9 +269,7 @@ bool StreamableDTO::processEntries(EntryProcessor entryProcessor, void* capture 
   for (int i = 0; i < _tableSize; ++i) {
     Entry* entry = _table[i];
     while (entry != nullptr) {
-      bool keyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
-      bool valPmem = (entry->type == PMEM_VALUE || entry->type == PMEM_KEY_VALUE);
-      if (!entryProcessor(entry->key, entry->value, keyPmem, valPmem, capture)) {
+      if (!entryProcessor(entry->key, entry->value, entry->keyPmem, entry->valPmem, capture)) {
         return false;
       }
       entry = entry->next;
@@ -341,4 +332,3 @@ char* StreamableDTO::toLine(const char* key, const char* value, bool keyPmem, bo
   if (valPmem) strcpy_P(p, value); else strcpy(p, value);
   return out;
 }
-

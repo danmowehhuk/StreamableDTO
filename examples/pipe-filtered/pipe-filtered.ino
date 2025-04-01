@@ -28,17 +28,19 @@ void setup() {
    * Filter function parses the lines, filters out the line that has
    * the key "c" but stores its value in the "state" struct
    */
-  auto filter = [](const String &line, StreamableManager::DestinationStream* dest, void* state) -> bool {
+  auto filter = [](const char* line, StreamableManager::DestinationStream* dest, void* state) -> bool {
     State* s = static_cast<State*>(state);
-    int separatorIndex = line.indexOf('=');
-    String key = line.substring(0, separatorIndex);
-    String value = line.substring(separatorIndex + 1);
+
+    String str = String(line);
+    int separatorIndex = str.indexOf('=');
+    String key = str.substring(0, separatorIndex);
+    String value = str.substring(separatorIndex + 1);
     if (key.equals(s->keyToRemove)) {
       // Remove the key and save the value
       s->valueRemoved = value;
     } else {
       // Pass it through
-      dest->println(line);
+      dest->println(str.c_str());
     }
     return true; // keep going
   };

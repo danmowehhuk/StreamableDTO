@@ -1,3 +1,14 @@
+/*
+
+  StreamableDTO.h
+
+  Serializable data objects for Arduino
+
+  Copyright (c) 2025, Dan Mowehhuk (danmowehhuk@gmail.com)
+  All rights reserved.
+
+*/
+
 #ifndef _strdto_StreamableDTO_h
 #define _strdto_StreamableDTO_h
 
@@ -17,49 +28,15 @@
 class StreamableDTO {
 
   private:
-    StreamableDTO(const StreamableDTO &t) = delete;
-    friend class HashtableTestHelper; // test/test-suite/HashtableTestHelper.h
-
-    /*
-     * Indicates whether the key, value or both should be read from PROGMEM
-     * versus regular memory. This is stored in the Entry so that iterating
-     * operations read the key/value properly.
-     */
-    enum EntryMemoryType : uint8_t {
-      PMEM_KEY,
-      PMEM_VALUE,
-      PMEM_KEY_VALUE,
-      NON_PMEM
-    };
-
-    EntryMemoryType getMemoryType(bool keyPmem, bool valPmem);
 
     struct Entry {
-      EntryMemoryType type;
       const char* key;
       char* value;
       Entry* next;
-      Entry(EntryMemoryType type, const char* k, const char* v):
-          type(type), key(nullptr), value(nullptr), next(nullptr) {
-        if (type == PMEM_VALUE || type == NON_PMEM) {
-          key = strdup(k);
-        } else if (type == PMEM_KEY || type == PMEM_KEY_VALUE) {
-          key = k; // PROGMEM: No allocation, just store the pointer
-        }
-        if (type == PMEM_KEY || type == NON_PMEM) {
-          value = strdup(v);
-        } else if (type == PMEM_VALUE || type == PMEM_KEY_VALUE) {
-          value = const_cast<char*>(v); // PROGMEM: No allocation, just store the pointer
-        }
-      };
-      ~Entry() {
-        if (type == PMEM_VALUE || type == NON_PMEM && key) {
-          delete[] key;
-        }
-        if (type == PMEM_KEY || type == NON_PMEM && value) {
-          delete[] value;
-        }
-      };
+      bool keyPmem;
+      bool valPmem;
+      Entry(const char* k, const char* v, bool keyPmem, bool valPmem);
+      ~Entry();
     };
 
     /*
@@ -107,6 +84,8 @@ class StreamableDTO {
     };
 
     bool isCompatibleTypeAndVersion(MetaInfo* meta);
+
+    friend class HashtableTestHelper; // test/test-suite/HashtableTestHelper.h
 
 
   public:
@@ -160,6 +139,13 @@ class StreamableDTO {
      */
     bool clear();
 
+    // Disable moving and copying
+    StreamableDTO(StreamableDTO&& other) = delete;
+    StreamableDTO& operator=(StreamableDTO&& other) = delete;
+    StreamableDTO(const StreamableDTO&) = delete;
+    StreamableDTO& operator=(const StreamableDTO&) = delete;
+
+
   protected:
     friend class StreamableManager;
 
@@ -175,7 +161,6 @@ class StreamableDTO {
      * Return true if successful
      */
     typedef bool (*EntryProcessor)(const char* key, const char* value, bool keyPmem, bool valPmem, void* capture);
-    // typedef bool (*EntryProcessorStrings)(const String& key, const String& value, void* capture);
 
     /*
      * Iterate through all the Entry's in the table and pass the keys and values
@@ -184,30 +169,6 @@ class StreamableDTO {
      * Entry's were successfully handled.
      */
     bool processEntries(EntryProcessor entryProcessor, void* capture = nullptr);
-
-    /*
-     * Iterate through all the Entry's in the table and pass the keys and values
-     * to the entryProcessor after converting them to Strings. Returns true if all the 
-     * Entry's were successfully handled.
-     */
-    // bool processEntries(EntryProcessorStrings entryProcessor, void* capture = nullptr) {
-    //   for (int i = 0; i < _tableSize; ++i) {
-    //     Entry* entry = _table[i];
-    //     while (entry != nullptr) {
-    //       bool keyPmem = (entry->type == PMEM_KEY || entry->type == PMEM_KEY_VALUE);
-    //       bool valPmem = (entry->type == PMEM_VALUE || entry->type == PMEM_KEY_VALUE);
-    //       String key = keyPmem ? 
-    //             String(reinterpret_cast<const __FlashStringHelper *>(entry->key)) : String(entry->key);
-    //       String value = valPmem ? 
-    //             String(reinterpret_cast<const __FlashStringHelper *>(entry->value)) : String(entry->value);
-    //       if (!entryProcessor(key, value, capture)) {
-    //         return false;
-    //       }
-    //       entry = entry->next;
-    //     }
-    //   }
-    //   return true;
-    // };
 
     /*
      * Default implementation parses a key=value format line. 
@@ -223,12 +184,14 @@ class StreamableDTO {
     static MetaInfo* parseMetaLine(const char* metaLine);
 
     /*
-     * Default implementation simply puts the value in _table under "key"
+     * Default implementation simply puts the value in _table under "key". You may want
+     * to override to switch from the incoming RAM key to a PROGMEM key.
      */
     virtual void parseValue(uint16_t lineNumber, const char* key, const char* value);
 
     /*
-     * Default implementation returns "key=value"
+     * Default implementation returns "key=value". The return value must be created using 
+     * "new char[lineLength]" and will be automatically free()'d.
      */
     virtual char* toLine(const char* key, const char* value, bool keyPmem, bool valPmem);
 
