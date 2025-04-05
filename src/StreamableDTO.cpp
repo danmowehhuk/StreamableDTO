@@ -46,22 +46,26 @@ bool StreamableDTO::keyMatches(const char* key, const Entry* entry, bool keyPmem
       // key and entry->key are both in PROGMEM
       // For efficiency, only check pointer equality
       keysMatch = (entry->key == key);
+      if (!keysMatch) {
+        // Maybe different PROGMEM strings with the same value
+        // This is less efficient, but still valid
+        while (true) {
+          char* k = entry->key;
+          char c1 = pgm_read_byte(k++);
+          char c2 = pgm_read_byte(key++);
+
+          if (c1 != c2) return false;
+          if (c1 == '\0') return true;
+        }        
+      }
     } else {
       // key in PROGMEM, entry->key in regular memory
-      size_t size = strlen_P(key) + 1;
-      char buffer[size];
-      strcpy_P(buffer, key);
-      buffer[size-1] = '\0';
-      keysMatch = (strcmp(entry->key, buffer) == 0);
+      keysMatch = (strcmp_P(entry->key, key) == 0);
     }
   } else {
     if (entry->keyPmem) {
       // key in regular memory, entry->key in PROGMEM
-      size_t size = strlen_P(entry->key) + 1;
-      char buffer[size];
-      strcpy_P(buffer, entry->key);
-      buffer[size-1] = '\0';
-      keysMatch = (strcmp(buffer, key) == 0);
+      keysMatch = (strcmp_P(key, entry->key) == 0);
     } else {
       // key and entry->key are both in regular memory
       keysMatch = (strcmp(entry->key, key) == 0);
