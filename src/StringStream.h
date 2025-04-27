@@ -5,49 +5,40 @@
 #include <Arduino.h>
 
 /*
- * A Stream backed by an in-memory String object
+ * A Stream backed by an in-memory string
  */
 class StringStream : public Stream {
-
   public:
-    StringStream(const String& str) : _str(str), _pos(0), _outStream(false) {};
-    StringStream() : _str(String()), _pos(0), _outStream(true) {};
-    size_t write(uint8_t byte) override {
-      _str += (char)byte;
-      return 1;
-    };
-    int available() override {
-      return _pos < _str.length();
-    };
-    int availableForWrite() override {
-      return _outStream ? INT8_MAX : 0;
-    };
-    int read() override {
-      if (_pos >= _str.length()) return -1;
-      return _str[_pos++];
-    };
-    int peek() override {
-      if (_pos >= _str.length()) return -1;
-      return _str[_pos];
-    };
-    void flush() override {
-      _pos = _str.length();  // Move to the end of the string
-    };
-    String getString() {
-      return _str;
-    };
-    void reset() {
-      if (_outStream) {
-        _str = String();
-      }
-      _pos = 0;
-    };
+
+    // Construct an input stream (source)
+    StringStream(const String& str);
+    StringStream(const char* str);
+    StringStream(const __FlashStringHelper* fstr);
+
+    // Construct an output stream (sink)
+    StringStream();
+
+    ~StringStream();
+
+    size_t write(uint8_t byte) override;
+    int available() override;
+    int availableForWrite() override;
+    int read() override;
+    int peek() override;
+    void flush() override;
+    String getString();
+    char* get();
+    void reset();
+    void toInStream();
 
   private:
-    String _str;
-    size_t _pos;
-    bool _outStream;
+    char* _buffer = nullptr;
+    size_t _pos = 0;
+    size_t _length = 0;
+    size_t _capacity = 0;
+    bool _outStream = false;
 
+    void initFromCString(const char* str, size_t len);
 };
 
 

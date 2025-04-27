@@ -50,6 +50,7 @@ void setup() {
   streamMgr.send(&tmp, book);
 
   Serial.println("Reloading book from tmp stream...");
+  tmp.toInStream();
   Book* book2 = streamMgr.load(&tmp, typeMapper);
 
   Serial.println("Streaming book to Serial:");

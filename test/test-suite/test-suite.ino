@@ -235,6 +235,50 @@ void testLoadIncompatibleVersion(TestInvocation* t) {
   delete dto;
 }
 
+void testMemoryBehavior(TestInvocation* t) {
+  t->setName(F("StreamableDTO Memory Behavior"));
+  StreamableDTO dto;
+  t->assert(dto.put(REGMEM_KEY, REGMEM_VAL), F("put RAM->RAM failed"));
+  char* storedRamRam = dto.get(REGMEM_KEY);
+  t->assert(storedRamRam != nullptr, F("get RAM->RAM failed"));
+  t->assert(storedRamRam != REGMEM_VAL, F("RAM->RAM value should be copied"));
+  t->assert(dto.put(PMEM_KEY, REGMEM_VAL), F("put Flash->RAM failed"));
+  char* storedFlashRam = dto.get(PMEM_KEY);
+  t->assert(storedFlashRam != nullptr, F("get Flash->RAM failed"));
+  t->assert(storedFlashRam != REGMEM_VAL, F("Flash->RAM value should be copied"));
+  t->assert(dto.put(REGMEM_KEY, reinterpret_cast<const __FlashStringHelper*>(PMEM_VAL)), F("put RAM->Flash failed"));
+  char* storedRamFlash = dto.get(REGMEM_KEY);
+  t->assert(storedRamFlash != nullptr, F("get RAM->Flash failed"));
+  t->assert(storedRamFlash == PMEM_VAL, F("RAM->Flash should store flash pointer"));
+  t->assert(dto.put(reinterpret_cast<const __FlashStringHelper*>(PMEM_KEY),
+      reinterpret_cast<const __FlashStringHelper*>(PMEM_VAL)), F("put Flash->Flash failed"));
+  char* storedFlashFlash = dto.get(PMEM_KEY, true);
+  t->assert(storedFlashFlash != nullptr, F("get Flash->Flash failed"));
+  t->assert(storedFlashFlash == PMEM_VAL, F("Flash->Flash should store flash pointer"));
+}
+
+void testDestructionSafety(TestInvocation* t) {
+  t->setName(F("StreamableDTO Destruction Safety"));
+
+  char* dynamicKey = strdup("dynamicKey");
+  char* dynamicVal = strdup("dynamicVal");
+
+  {
+    StreamableDTO dto;
+    t->assert(dto.put(dynamicKey, dynamicVal), F("put dynamic->dynamic failed"));
+    t->assert(dto.put(PMEM_KEY, PMEM_VAL), F("put flash->flash failed"));
+  }
+  // StreamableDTO is now out of scope and destroyed
+
+  free(dynamicKey);
+  free(dynamicVal);
+
+  // If StreamableDTO incorrectly stored direct pointers, double-free would occur
+  // If program doesn't crash, destructor behaved correctly!
+  t->assert(true, F("StreamableDTO destruction completed safely"));
+}
+
+
 void setup() {
   Serial.begin(9600);
   while (!Serial);
@@ -256,7 +300,9 @@ void setup() {
     testLoadTypedStreamableDTO,
     testSendTypedStreamableDTO,
     testLoadIncorrectType,
-    testLoadIncompatibleVersion
+    testLoadIncompatibleVersion,
+    testMemoryBehavior,
+    testDestructionSafety    
   };
 
   runTestSuiteShowMem(tests);

@@ -70,16 +70,16 @@ bool StreamableManager::load(Stream* src, StreamableDTO* dto, uint16_t lineNumSt
           lineNumber++;
           continue;
         } else {
-          if (line) free(line);
+          if (line) delete[] line;
           return false; // incompatible type or version
         }
       }
     }
     if (!dto->parseLine(lineNumber++, line)) {
-      if (line) free(line);
+      if (line) delete[] line;
       return false;
     }
-    if (line) free(line);
+    if (line) delete[] line;
   }
   return true;
 }
@@ -90,7 +90,7 @@ StreamableDTO* StreamableManager::load(Stream* src, TypeMapper typeMapper) {
     metaLine = readLine(src);
   }
   StreamableDTO::MetaInfo* meta = StreamableDTO::parseMetaLine(metaLine);
-  if (metaLine) free(metaLine);
+  if (metaLine) delete[] metaLine;
   if (!meta) {
 #if defined(DEBUG)
     Serial.println(F("ERROR: Could not determine type from stream"));
@@ -125,18 +125,19 @@ void StreamableManager::send(Stream* dest, StreamableDTO* dto) {
   struct Capture {
     Stream* dest;
     StreamableDTO* dto;
-    Capture(Stream* dest, StreamableDTO* dto): dest(dest), dto(dto) {};
+    size_t bufferSize;
+    Capture(Stream* dest, StreamableDTO* dto, size_t bufferSize):
+        dest(dest), dto(dto), bufferSize(bufferSize) {};
   };
-  Capture capture(dest, dto);
   auto entryProcessor = [](const char* key, const char* value, bool keyPmem, bool valPmem, void* capture) -> bool {
     Capture* c = static_cast<Capture*>(capture);
-    char* line = c->dto->toLine(key, value, keyPmem, valPmem);
-    if (line) {
+    char line[c->bufferSize];
+    if (c->dto->toLine(key, value, keyPmem, valPmem, line, c->bufferSize)) {
       sendWithFlowControl(line, c->dest);
-      free(line);
     }
     return true;
   };
+  Capture capture(dest, dto, _bufferBytes);
   dto->processEntries(entryProcessor, &capture);
 }
 
@@ -149,7 +150,7 @@ void StreamableManager::pipe(Stream* src, Stream* dest, FilterFunction filter = 
     } else {
       if (!filter(line, &out, state)) break;
     }
-    if (line) free(line);
+    if (line) delete[] line;
   }
 }
 

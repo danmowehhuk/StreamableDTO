@@ -103,7 +103,7 @@ class StreamableDTO {
     bool put_P(const char* key, const __FlashStringHelper* value);
     bool put(const __FlashStringHelper* key, const char* value, bool valPmem = false);
     bool put(const __FlashStringHelper* key, const __FlashStringHelper* value);
-    bool putEmpty(const char* key, bool pmemKey);
+    bool putEmpty(const char* key, bool pmemKey = false);
     bool putEmpty(const __FlashStringHelper* key);
     bool putEmpty_P(const char* key);
 
@@ -155,12 +155,12 @@ class StreamableDTO {
 
     /*
      * Do something with the key and value extracted from an Entry.
-     * StreamableManager prints 'key=value' lines to a destination
+     * StreamableManager uses this to print 'key=value' lines to a destination
      * stream, for example.
      *
      * Return true if successful
      */
-    typedef bool (*EntryProcessor)(const char* key, const char* value, bool keyPmem, bool valPmem, void* capture);
+    typedef bool (*EntryProcessor)(const char* key, const char* value, bool keyPmem, bool valPmem, void* state);
 
     /*
      * Iterate through all the Entry's in the table and pass the keys and values
@@ -168,7 +168,7 @@ class StreamableDTO {
      * they are stored in PROGMEM or regular memory. Returns true if all the 
      * Entry's were successfully handled.
      */
-    bool processEntries(EntryProcessor entryProcessor, void* capture = nullptr);
+    bool processEntries(EntryProcessor entryProcessor, void* state = nullptr);
 
     /*
      * Default implementation parses a key=value format line. 
@@ -190,10 +190,9 @@ class StreamableDTO {
     virtual void parseValue(uint16_t lineNumber, const char* key, const char* value);
 
     /*
-     * Default implementation returns "key=value". The return value must be created using 
-     * "new char[lineLength]" and will be automatically free()'d.
+     * Default implementation returns "key=value"
      */
-    virtual char* toLine(const char* key, const char* value, bool keyPmem, bool valPmem);
+    virtual bool toLine(const char* key, const char* value, bool keyPmem, bool valPmem, char* buffer, size_t bufferSize);
 
 };
  

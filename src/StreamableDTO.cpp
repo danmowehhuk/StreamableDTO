@@ -21,8 +21,8 @@ StreamableDTO::Entry::Entry(const char* k, const char* v, bool keyPmem, bool val
 }
 
 StreamableDTO::Entry::~Entry() {
-  if (key && !keyPmem) delete[] key;
-  if (value && !valPmem) delete[] value;
+  if (key && !keyPmem) free(key); // strdup'ed char* requires free, not delete
+  if (value && !valPmem) free(value);
 };
 
 int StreamableDTO::hash(const char* key, bool pmem = false) {
@@ -128,7 +128,7 @@ bool StreamableDTO::put(const char* key, const char* value, bool keyPmem = false
   Entry* entry = _table[index];
   while (entry != nullptr) {
     if (keyMatches(key, entry, keyPmem)) {
-      if (!entry->valPmem) delete[] entry->value;
+      if (!entry->valPmem) free(entry->value); // strdup'ed char* requires free not delete
       if (valPmem) {
         entry->value = value;
       } else {
@@ -143,8 +143,12 @@ bool StreamableDTO::put(const char* key, const char* value, bool keyPmem = false
   newEntry->next = _table[index];
   _table[index] = newEntry;
   _count++;
+
   if (static_cast<float>(_count) / _tableSize > _loadFactorThreshold) {
     if (!resize(_tableSize * 2)) {
+#if defined(DEBUG)
+      Serial.println(F("Hashtable resize failed!"));
+#endif
       return false;
     }
   }
@@ -171,7 +175,7 @@ bool StreamableDTO::put_P(const char* key, const __FlashStringHelper* value) {
   return put(key, reinterpret_cast<const char*>(value), true, true);
 }
 
-bool StreamableDTO::putEmpty(const char* key, bool pmemKey) {
+bool StreamableDTO::putEmpty(const char* key, bool pmemKey = false) {
   return put(key, F(""), pmemKey);
 }
 
@@ -273,7 +277,8 @@ bool StreamableDTO::processEntries(EntryProcessor entryProcessor, void* capture 
   for (int i = 0; i < _tableSize; ++i) {
     Entry* entry = _table[i];
     while (entry != nullptr) {
-      if (!entryProcessor(entry->key, entry->value, entry->keyPmem, entry->valPmem, capture)) {
+      bool result = entryProcessor(entry->key, entry->value, entry->keyPmem, entry->valPmem, capture);
+      if (!result) {
         return false;
       }
       entry = entry->next;
@@ -325,14 +330,32 @@ void StreamableDTO::parseValue(uint16_t lineNumber, const char* key, const char*
   put(key, value);
 }
 
-char* StreamableDTO::toLine(const char* key, const char* value, bool keyPmem, bool valPmem) {
+bool StreamableDTO::toLine(const char* key, const char* value, bool keyPmem, bool valPmem, char* buffer, size_t bufferSize) {
+  if (!key || !value || !buffer || bufferSize == 0) return false;
+
   size_t keyLen = keyPmem ? strlen_P(key) : strlen(key);
   size_t valLen = valPmem ? strlen_P(value) : strlen(value);
-  char* out = new char[keyLen + valLen + 2](); // key + '=' + val + '\0'
-  char* p = out;
-  if (keyPmem) strcpy_P(p, key); else strcpy(p, key);
+  size_t needed = keyLen + 1 + valLen + 1; // '=' + '\0'
+
+  if (needed > bufferSize) {
+#if defined(DEBUG)
+    Serial.println(F("toLine: buffer too small"));
+#endif
+    return false;
+  }
+
+  char* p = buffer;
+  if (keyPmem) {
+    strcpy_P(p, key);
+  } else {
+    strcpy(p, key);
+  }
   p += keyLen;
   *p++ = '=';
-  if (valPmem) strcpy_P(p, value); else strcpy(p, value);
-  return out;
+  if (valPmem) {
+    strcpy_P(p, value);
+  } else {
+    strcpy(p, value);
+  }
+  return true;
 }

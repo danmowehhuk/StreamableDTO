@@ -110,7 +110,7 @@ class Book: public StreamableDTO {
     /*
      * Also override toLine to reconstruct the "meta" field
      */
-    char* toLine(const char* key, const char* value, bool keyPmem, bool valPmem) override {
+    bool toLine(const char* key, const char* value, bool keyPmem, bool valPmem, char* buffer, size_t bufferSize) override {
       if (key == BOOK_META_KEY) {
 
         // Ignore the value param (it's empty) and reconstruct "meta" value
@@ -119,13 +119,20 @@ class Book: public StreamableDTO {
         size_t len = k.length() + 1;  // +1 for null terminator
         char* line = new char[len];
         k.toCharArray(line, len);
-        return line;
 
+        if (len > bufferSize) {
+#if defined(DEBUG)
+          Serial.println(F("toLine: buffer too small for BOOK_META_KEY"));
+#endif
+          return false;
+        }
+        strncpy(buffer, line, len);
+        return true;
       } else {
         /*
          * Default to base implementation for all other fields
          */
-        return StreamableDTO::toLine(key, value, keyPmem, valPmem);
+        return StreamableDTO::toLine(key, value, keyPmem, valPmem, buffer, bufferSize);
       }
     };
 
