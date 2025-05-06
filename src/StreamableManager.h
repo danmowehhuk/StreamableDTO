@@ -48,6 +48,8 @@ class StreamableManager {
     StreamableManager() {};
     StreamableManager(size_t bufferBytes): _bufferBytes(bufferBytes) {};
 
+    const size_t getBufferSize() const { return _bufferBytes; };
+
     /*
      * Loads the stream data into memory, hydrating the provided DTO and 
      * verifying the sub-type and version for compatibility. If the provided
