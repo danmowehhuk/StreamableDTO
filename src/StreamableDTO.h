@@ -49,6 +49,7 @@ class StreamableDTO {
     int _tableSize;
     int _count;
     float _loadFactorThreshold = 0.7;
+    uint8_t _deserializedVer = 0;
 
     /*
      * The hash is based on the _content_ that the char* points to, but the
@@ -78,9 +79,9 @@ class StreamableDTO {
 
     struct MetaInfo {
       int16_t typeId;
-      uint8_t minCompatVersion;
-      MetaInfo(int16_t typeId, uint8_t minCompatVersion): 
-            typeId(typeId), minCompatVersion(minCompatVersion) {};
+      uint8_t serialVersion;
+      MetaInfo(int16_t typeId, uint8_t serialVersion): 
+            typeId(typeId), serialVersion(serialVersion) {};
     };
 
     bool isCompatibleTypeAndVersion(MetaInfo* meta);
@@ -139,6 +140,23 @@ class StreamableDTO {
      */
     bool clear();
 
+    /*
+     * The serial version of the loaded DTO, if it was typed
+     */
+    const uint8_t getDeserializedVersion() {
+      return _deserializedVer;
+    }
+
+    /*
+     * The serial version of the DTO code, if it is typed
+     */
+    virtual uint8_t getSerialVersion()    {  return 0;  };
+
+    /*
+     * The unique ID of this type, or -1 if untyped
+     */
+    virtual int16_t getTypeId()           {  return -1; };
+
     // Disable moving and copying
     StreamableDTO(StreamableDTO&& other) = delete;
     StreamableDTO& operator=(StreamableDTO&& other) = delete;
@@ -149,8 +167,6 @@ class StreamableDTO {
   protected:
     friend class StreamableManager;
 
-    virtual int16_t getTypeId()          {  return -1; };
-    virtual uint8_t getSerialVersion()    {  return 0;  };
     virtual uint8_t getMinCompatVersion() {  return 0;  };
 
     /*
@@ -178,7 +194,7 @@ class StreamableDTO {
     virtual bool parseLine(uint16_t lineNumber, const char* line);
 
     /* 
-     * Parses the special meta line containing typeId and minCompatVersion, verifying
+     * Parses the special meta line containing typeId and serialVersion, verifying
      * compatibility. Returns false of the provided line is not a meta line
      */
     static MetaInfo* parseMetaLine(const char* metaLine);

@@ -52,9 +52,9 @@ void StreamableManager::sendMetaLine(StreamableDTO* dto, Stream* dest) {
   constexpr size_t totalLen = keyLen + 1 + 5 + 1 + 3 + 1; // "__tvid=65535|255\0"
   char metaLine[totalLen];
   const uint16_t typeId = dto->getTypeId();
-  const uint8_t minCompat = dto->getMinCompatVersion();
+  const uint8_t serialVer = dto->getSerialVersion();
   static const char format[] PROGMEM = "%s=%u|%u";
-  snprintf_P(metaLine, totalLen, format, key, typeId, minCompat);
+  snprintf_P(metaLine, totalLen, format, key, typeId, serialVer);
   sendWithFlowControl(metaLine, dest);
 }
 
@@ -108,6 +108,7 @@ StreamableDTO* StreamableManager::load(Stream* src, TypeMapper typeMapper) {
   }
   if (dto->isCompatibleTypeAndVersion(meta)) {
     load(src, dto, 1);
+    dto->_deserializedVer = meta->serialVersion;
   } else {
     // Incorrect type or incompatible version
     delete dto;

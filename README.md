@@ -232,10 +232,10 @@ When a `StreamableDTO` has a type ID, the `StreamableManager`
 will include a special metadata line at the beginning of the serialized output containing the type ID and version. This
 line looks like:
 ```cpp
-__tvid=<typeId>|<minCompatVersion>
+__tvid=<typeId>|<serialVersion>
 ```
 
-For example, a `Book` object with type ID `1` and minCompatVersion `0` will begin with `__tvid=1|0` on the first line 
+For example, a `Book` object with type ID `1` and serialVersion `0` will begin with `__tvid=1|0` on the first line 
 when serialized (the library handles this automatically). The receiving side uses this information to decide how to 
 instantiate the object and whether it can parse it.
 

@@ -109,14 +109,14 @@ bool StreamableDTO::isCompatibleTypeAndVersion(MetaInfo* meta) {
 #endif
     return false;
   }
-  if (getSerialVersion() < meta->minCompatVersion) {
+  if (getMinCompatVersion() > meta->serialVersion) {
 #if defined(DEBUG)
     Serial.print(F("ERROR: Incompatible version for DTO typeId="));
     Serial.print(getTypeId());
     Serial.print(F(", have DTO v"));
-    Serial.print(getSerialVersion());
-    Serial.print(F(" but stream requires >=v"));
-    Serial.println(meta->minCompatVersion);
+    Serial.print(meta->serialVersion);
+    Serial.print(F(" but require >=v"));
+    Serial.println(getMinCompatVersion());
 #endif
     return false;
   }
@@ -297,8 +297,8 @@ StreamableDTO::MetaInfo* StreamableDTO::parseMetaLine(const char* metaLine) {
   char typeIdStr[8] = {0}; // fits int16_t
   strncpy(typeIdStr, typeIdStart, sep - typeIdStart);
   int16_t typeId = atoi(typeIdStr);
-  uint8_t minCompatVersion = atoi(sep + 1);
-  return new MetaInfo(typeId, minCompatVersion);
+  uint8_t serialVersion = atoi(sep + 1);
+  return new MetaInfo(typeId, serialVersion);
 }
 
 bool StreamableDTO::parseLine(uint16_t lineNumber, const char* line) {

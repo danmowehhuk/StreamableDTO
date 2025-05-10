@@ -190,7 +190,7 @@ void testSendUntypedStreamableDTO(TestInvocation* t) {
 
 void testLoadTypedStreamableDTO(TestInvocation* t) {
   t->setName(F("Load typed StreamableDTO"));
-  String data = F("__tvid=1|0\nfoo=bar\nabc=def\n");
+  String data = F("__tvid=1|2\nfoo=bar\nabc=def\n");
   StringStream ss(data);
   StreamableDTO* dto = streamMgr.load(&ss, typeMapper);
   t->assert(dto, F("Failed to load MyTypedDTO"));
@@ -228,7 +228,7 @@ void testLoadIncorrectType(TestInvocation* t) {
 
 void testLoadIncompatibleVersion(TestInvocation* t) {
   t->setName(F("Load incompatible version"));
-  String data = F("__tvid=1|6\nfoo=bar\nabc=def\n");
+  String data = F("__tvid=1|1\nfoo=bar\nabc=def\n");
   StringStream ss(data);
   StreamableDTO* dto = streamMgr.load(&ss, typeMapper);
   t->assert(!dto, F("Should have failed to load DTO"));

@@ -6,7 +6,7 @@
  *       responsible for ensuring that your typeIds are unique.
  *
  * When a StreamableDTO with a typeId is serialized, the typeId
- * and minimum compatible version number are included in a 
+ * and serial version number are included in a 
  * special meta field. When deserializing a StreamableDTO that
  * has this special meta field, the StreamableManager checks 
  * that the typeId of the DTO instance actually matches, and that
