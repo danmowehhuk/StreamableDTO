@@ -143,15 +143,23 @@ void StreamableManager::send(Stream* dest, StreamableDTO* dto) {
 }
 
 void StreamableManager::pipe(Stream* src, Stream* dest, FilterFunction filter = nullptr, void* state = nullptr) {
+  if (!src) {
+#if (defined(DEBUG))
+    Serial.println(F("ERROR: StreamableManager::pipe src or dest stream is nullptr"));
+#endif    
+    return;
+  }
   DestinationStream out(dest);
+  bool stop = false;
   while (src->available()) {
     char* line = readLine(src);
     if (filter == nullptr) {
       out.println(line);
     } else {
-      if (!filter(line, &out, state)) break;
+      stop = !filter(line, &out, state);
     }
     if (line) delete[] line;
+    if (stop) break;
   }
 }
 
