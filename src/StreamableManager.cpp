@@ -45,7 +45,14 @@ void StreamableManager::sendWithFlowControl(const char* line, Stream* dest) {
   dest->write('\n');
 }
 
-void StreamableManager::sendMetaLine(StreamableDTO* dto, Stream* dest) {
+void StreamableManager::sendWithoutFlowControl(const char* line, Stream* dest) {
+  for (size_t i = 0; i < strlen(line); i++) {
+    dest->write(line[i]);
+  }
+  dest->write('\n');
+}
+
+void StreamableManager::sendMetaLine(StreamableDTO* dto, Stream* dest, bool flowControl = false) {
   constexpr size_t keyLen = 6;
   char key[keyLen + 1];
   strcpy_P(key, PSTR("__tvid"));
@@ -55,7 +62,11 @@ void StreamableManager::sendMetaLine(StreamableDTO* dto, Stream* dest) {
   const uint8_t serialVer = dto->getSerialVersion();
   static const char format[] PROGMEM = "%s=%u|%u";
   snprintf_P(metaLine, totalLen, format, key, typeId, serialVer);
-  sendWithFlowControl(metaLine, dest);
+  if (flowControl) {
+    sendWithFlowControl(metaLine, dest);
+  } else {
+    sendWithoutFlowControl(metaLine, dest);
+  }
 }
 
 bool StreamableManager::load(Stream* src, StreamableDTO* dto, uint16_t lineNumStart = 0) {
@@ -119,30 +130,35 @@ StreamableDTO* StreamableManager::load(Stream* src, TypeMapper typeMapper) {
   return dto;
 }
 
-void StreamableManager::send(Stream* dest, StreamableDTO* dto) {
+void StreamableManager::send(Stream* dest, StreamableDTO* dto, bool flowControl = false) {
   if (dto->getTypeId() != -1) {
-    sendMetaLine(dto, dest);
+    sendMetaLine(dto, dest, flowControl);
   }
   struct Capture {
     Stream* dest;
     StreamableDTO* dto;
     size_t bufferSize;
-    Capture(Stream* dest, StreamableDTO* dto, size_t bufferSize):
-        dest(dest), dto(dto), bufferSize(bufferSize) {};
+    bool flowControl;
+    Capture(Stream* dest, StreamableDTO* dto, size_t bufferSize, bool flowControl):
+        dest(dest), dto(dto), bufferSize(bufferSize), flowControl(flowControl) {};
   };
   auto entryProcessor = [](const char* key, const char* value, bool keyPmem, bool valPmem, void* capture) -> bool {
     Capture* c = static_cast<Capture*>(capture);
     char line[c->bufferSize];
     if (c->dto->toLine(key, value, keyPmem, valPmem, line, c->bufferSize)) {
-      sendWithFlowControl(line, c->dest);
+      if (c->flowControl) {
+        sendWithFlowControl(line, c->dest);
+      } else {
+        sendWithoutFlowControl(line, c->dest);
+      }
     }
     return true;
   };
-  Capture capture(dest, dto, _bufferBytes);
+  Capture capture(dest, dto, _bufferBytes, flowControl);
   dto->processEntries(entryProcessor, &capture);
 }
 
-void StreamableManager::pipe(Stream* src, Stream* dest, FilterFunction filter = nullptr, void* state = nullptr) {
+void StreamableManager::pipe(Stream* src, Stream* dest, FilterFunction filter = nullptr, bool flowControl = false, void* state = nullptr) {
   if (!src) {
 #if (defined(DEBUG))
     Serial.println(F("ERROR: StreamableManager::pipe src or dest stream is nullptr"));
@@ -154,7 +170,7 @@ void StreamableManager::pipe(Stream* src, Stream* dest, FilterFunction filter = 
   while (src->available()) {
     char* line = readLine(src);
     if (filter == nullptr) {
-      out.println(line);
+      out.println(line, flowControl);
     } else {
       stop = !filter(line, &out, state);
     }

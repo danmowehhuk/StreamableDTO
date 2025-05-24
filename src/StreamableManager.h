@@ -42,7 +42,8 @@ class StreamableManager {
      * has space in its buffer before sending the next char.
      */
     static void sendWithFlowControl(const char* line, Stream* dest);
-    static void sendMetaLine(StreamableDTO* dto, Stream* dest);
+    static void sendWithoutFlowControl(const char* line, Stream* dest);
+    static void sendMetaLine(StreamableDTO* dto, Stream* dest, bool flowControl = false);
 
   public:
     StreamableManager() {};
@@ -79,15 +80,19 @@ class StreamableManager {
     /*
      * Streams the contents of the provided DTO to a stream
      */
-    void send(Stream* dest, StreamableDTO* dto);
+    void send(Stream* dest, StreamableDTO* dto, bool flowControl = false);
 
     // Wraps a raw stream providing null checking and flow control
     class DestinationStream {
       public:
         DestinationStream(Stream* dest): _dest(dest) {};
-        void println(const char* line) {
+        void println(const char* line, bool flowControl = false) {
           if (_dest != nullptr) {
-            StreamableManager::sendWithFlowControl(line, _dest);
+            if (flowControl) {
+              StreamableManager::sendWithFlowControl(line, _dest);
+            } else {
+              StreamableManager::sendWithoutFlowControl(line, _dest);
+            }
           }
         };
       private:
@@ -107,7 +112,7 @@ class StreamableManager {
      * Passes data from src to dest, holding only one line in memory at a time.
      * If the destination stream is nullptr, it's like streaming to /dev/null
      */
-    void pipe(Stream* src, Stream* dest, FilterFunction filter = nullptr, void* state = nullptr);
+    void pipe(Stream* src, Stream* dest, FilterFunction filter = nullptr, bool flowControl = false, void* state = nullptr);
 
     // Disable moving and copying
     StreamableManager(StreamableManager&& other) = delete;

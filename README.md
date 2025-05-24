@@ -276,6 +276,9 @@ Because StreamableManager works with Arduino `Stream` objects, you can use it wi
 `SoftwareSerial`, `File` (SD card), etc. The library also provides a `StringStream` class, which is extremely handy for 
 testing and in-memory operations. `StringStream` allows you to use a String as a `Stream` for both input and output.
 
+> NOTE: Flow control is off by default because `Stream` types (in particular `SdFile`) don't necessarily support it.
+> If communicating over a serial UART, it is recommended to turn flow control on in calls to `send(...)` and `pipe(...)`
+
 **Example – Serializing and Deserializing (Untyped):**
 ```cpp
 #include <StreamableDTO.h>
