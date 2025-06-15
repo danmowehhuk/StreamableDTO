@@ -28,15 +28,16 @@ After installation, include the library in your sketch:
 
 ```cpp
 #include <StreamableDTO.h>
+
+// And/or
 #include <StreamableManager.h>
-#include <StringStream.h>
 ```
 
-Now you’re ready to use StreamableDTO in your Arduino projects.
+Now you’re ready to use StreamableDTO in your Arduino project.
 
 ## Untyped StreamableDTO
 
-The simplest way to use StreamableDTO is as a generic key/value store without specifying a type or version. This is 
+The simplest way to use StreamableDTO is as a simple key-value hashtable without specifying a type or version. This is 
 useful for quick serialization of data when you don’t need strict versioning. You can use `put()` to add fields and 
 `get()` to retrieve them by key:
 
@@ -330,6 +331,8 @@ if (dto) {
         Book* book = static_cast<Book*>(dto);
         Serial.println("Received book title: " + book->getName());
         // ... use book ...
+
+        // ... remember to 'delete book'
     }
 }
 ```
