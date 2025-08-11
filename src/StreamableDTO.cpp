@@ -49,10 +49,11 @@ bool StreamableDTO::keyMatches(const char* key, const Entry* entry, bool keyPmem
       if (!keysMatch) {
         // Maybe different PROGMEM strings with the same value
         // This is less efficient, but still valid
+        const char* k = entry->key;
+        const char* k2 = key;
         while (true) {
-          char* k = entry->key;
           char c1 = pgm_read_byte(k++);
-          char c2 = pgm_read_byte(key++);
+          char c2 = pgm_read_byte(k2++);
 
           if (c1 != c2) return false;
           if (c1 == '\0') return true;

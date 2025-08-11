@@ -62,6 +62,37 @@ void testKeyMatch(TestInvocation* t) {
       F("PROGMEM key didn't match reg mem entry->key"));
 }
 
+void testKeyMatchPROGMEMvsPROGMEM(TestInvocation* t) {
+  t->setName(F("PROGMEM vs PROGMEM key matching (infinite loop fix)"));
+  
+  // Test the specific scenario that had the infinite loop bug
+  // Two different PROGMEM strings with the same content
+  static const char PROGMEM_KEY_A[] PROGMEM = "testKey";
+  static const char PROGMEM_KEY_B[] PROGMEM = "testKey";
+  
+  StreamableDTO table;
+  
+  // These should be different pointers but same content
+  t->assert(PROGMEM_KEY_A != PROGMEM_KEY_B, F("PROGMEM keys should be different pointers"));
+  
+  // Test that keyMatches works correctly for this scenario
+  bool matches = helper.keyMatches(&table, PROGMEM_KEY_A, true, PROGMEM_KEY_B, PMEM_VAL, true, true);
+  t->assert(matches, F("PROGMEM vs PROGMEM key matching failed"));
+  
+  // Test the reverse direction
+  matches = helper.keyMatches(&table, PROGMEM_KEY_B, true, PROGMEM_KEY_A, PMEM_VAL, true, true);
+  t->assert(matches, F("PROGMEM vs PROGMEM key matching failed (reverse)"));
+  
+  // Test with different content
+  static const char PROGMEM_KEY_C[] PROGMEM = "different";
+  matches = helper.keyMatches(&table, PROGMEM_KEY_A, true, PROGMEM_KEY_C, PMEM_VAL, true, true);
+  t->assert(!matches, F("PROGMEM vs PROGMEM should not match different content"));
+  
+  // Test with same pointer (should be fast path)
+  matches = helper.keyMatches(&table, PROGMEM_KEY_A, true, PROGMEM_KEY_A, PMEM_VAL, true, true);
+  t->assert(matches, F("PROGMEM vs PROGMEM same pointer should match"));
+}
+
 void testPut(TestInvocation* t) {
   t->setName(F("Put new and existing key"));
   StreamableDTO table;
@@ -288,6 +319,7 @@ void setup() {
     testInitialSizeConstructor,
     testHashFunction,
     testKeyMatch,
+    testKeyMatchPROGMEMvsPROGMEM,
     testPut,
     testExists,
     testGet,
