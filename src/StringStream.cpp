@@ -27,8 +27,10 @@ StringStream::StringStream(const __FlashStringHelper* fstr) : _pos(0), _outStrea
   _buffer[len] = '\0';
 }
 
-StringStream::StringStream() : _pos(0), _outStream(true) {
-  _capacity = 128; // default output buffer size
+StringStream::StringStream() : StringStream(128) {}
+
+StringStream::StringStream(size_t capacity) : _pos(0), _outStream(true) {
+  _capacity = capacity;
   _buffer = new char[_capacity + 1]();
   _length = 0;
 }

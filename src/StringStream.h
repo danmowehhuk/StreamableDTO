@@ -16,7 +16,11 @@ class StringStream : public Stream {
     StringStream(const __FlashStringHelper* fstr);
 
     // Construct an output stream (sink)
+    // Default output stream is 128 bytes
     StringStream();
+
+    // Construct an output stream (sink) with a specified capacity
+    StringStream(size_t capacity);
 
     ~StringStream();
 
