@@ -120,14 +120,18 @@ void testGet(TestInvocation* t) {
   table.put(PMEM_KEY, PMEM_VAL, true, true);
   table.put(PMEM_KEY, REGMEM_VAL, true, false); // update
   table.put("foo", "bar");
-  t->assert(helper.verifyEntryCount(&table, 2), F("Hashtable entry count should be 2"));
+  table.put(F("xyz"), F("def"));
+  t->assert(helper.verifyEntryCount(&table, 3), F("Hashtable entry count should be 3"));
   char* val1 = table.get(PMEM_KEY, true);
   t->assert(val1, F("Get by PROGMEM key failed"));
   char* val2 = table.get(REGMEM_KEY);
   t->assert(val2, F("Get by regular memory key failed"));
   t->assertEqual(val1, val2, F("Both gets should have returned same value"));
-  t->assertEqual(val1, REGMEM_VAL, F("Get returned incorrect value"));
-  t->assertEqual(table.get("foo"), F("bar"), F("Get 'foo' returned incorrect value"));
+  t->assertEqual(val1, REGMEM_VAL);
+  t->assertEqual(table.get("foo"), F("bar"));
+  char* retrieved = table.get(F("xyz"));
+  t->assert(retrieved, F("F() value retrieval failed"));
+  t->assertEqual(reinterpret_cast<const __FlashStringHelper*>(retrieved), F("def"));
   t->assert(!table.get("abc"), F("Get unknown key should return nullptr"));
 }
 
@@ -162,8 +166,34 @@ void testResize(TestInvocation* t) {
   t->assert(helper.getTableSize(&table) == 4, F("Table size should be 4"));
   table.put(F("abc"),F("def"));
   table.put(F("ghi"),F("jkl"));
+
+  // Fix F() value comparisons - cast to __FlashStringHelper* for proper PROGMEM comparison
+  const __FlashStringHelper* keys[] = {F("abc"), F("ghi")};
+  const __FlashStringHelper* expectedValues[] = {F("def"), F("jkl")};
+  
+  for (int i = 0; i < 2; i++) {
+    char* retrieved = table.get(keys[i]);
+    t->assert(retrieved != nullptr, F("F() value retrieval failed"));
+    t->assertEqual(reinterpret_cast<const __FlashStringHelper*>(retrieved), expectedValues[i]);
+  }
+
+  t->assert(table.exists(F("abc")), F("abc should exist"));
+  t->assert(table.exists(F("ghi")), F("ghi should exist"));
+  t->assert(!table.exists(F("mno")), F("mno should not exist"));
+
   t->assert(helper.getTableSize(&table) == 4, F("Table size should still be 4"));
   table.put(F("mno"),F("pqr")); // push it over 70% load
+
+  // Fix F() value comparisons - cast to __FlashStringHelper* for proper PROGMEM comparison
+  const __FlashStringHelper* keys2[] = {F("abc"), F("ghi"), F("mno")};
+  const __FlashStringHelper* expectedValues2[] = {F("def"), F("jkl"), F("pqr")};
+  
+  for (int i = 0; i < 3; i++) {
+    char* retrieved = table.get(keys2[i]);
+    t->assert(retrieved != nullptr, F("F() value retrieval failed"));
+    t->assertEqual(reinterpret_cast<const __FlashStringHelper*>(retrieved), expectedValues2[i]);
+  }
+
   t->assert(helper.getTableSize(&table) == 8, F("Table size should have doubled"));
   int entryCount = helper.getEntryCount(&table);
   t->assert((entryCount == 3 && helper.verifyEntryCount(&table, entryCount)),

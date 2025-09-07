@@ -18,6 +18,8 @@ StreamableDTO::Entry::Entry(const char* k, const char* v, bool keyPmem, bool val
     key(nullptr), value(nullptr), next(nullptr), keyPmem(keyPmem), valPmem(valPmem) {
   key = keyPmem ? k : strdup(k);
   value = valPmem ? v : strdup(v);
+  
+
 }
 
 StreamableDTO::Entry::~Entry() {
@@ -26,17 +28,22 @@ StreamableDTO::Entry::~Entry() {
 };
 
 int StreamableDTO::hash(const char* key, bool pmem = false) {
+  unsigned long h = rawHash(key, pmem);
+  return h % _tableSize;
+}
+
+int StreamableDTO::hash(const __FlashStringHelper* key) {
+  return hash(reinterpret_cast<const char*>(key), true);
+}
+
+unsigned long StreamableDTO::rawHash(const char* key, bool pmem) const {
   unsigned long h = 0;
   size_t length = pmem ? strlen_P(key) : strlen(key);
   for (size_t i = 0; i < length; i++) {
     char c = pmem ? pgm_read_byte(key + i) : key[i];
     h = 31 * h + c;
   }
-  return h % _tableSize;
-}
-
-int StreamableDTO::hash(const __FlashStringHelper* key) {
-  return hash(reinterpret_cast<const char*>(key), true);
+  return h;
 }
 
 bool StreamableDTO::keyMatches(const char* key, const Entry* entry, bool keyPmem) {
@@ -88,7 +95,7 @@ bool StreamableDTO::resize(int newSize) {
     Entry* entry = _table[i];
     while (entry) {
       Entry* next = entry->next;
-      int index = hash(entry->key, entry->keyPmem) % newSize;
+      int index = rawHash(entry->key, entry->keyPmem) % newSize;
       entry->next = newTable[index];
       newTable[index] = entry;
       entry = next;

@@ -60,6 +60,12 @@ class StreamableDTO {
     int hash(const __FlashStringHelper* key);
 
     /*
+     * Raw hash function that returns the full hash value without modulo operation.
+     * Used internally for resize operations.
+     */
+    unsigned long rawHash(const char* key, bool pmem = false) const;
+
+    /*
      * Once a key has been hashed to a bucket, the Entry's in that bucket
      * need to be checked to see which (if any) the key actually matches.
      * Since either or both of the key passed in and the entry->key could
@@ -210,7 +216,7 @@ class StreamableDTO {
      */
     virtual bool toLine(const char* key, const char* value, bool keyPmem, bool valPmem, char* buffer, size_t bufferSize);
 
-};
+  };
  
 
 
