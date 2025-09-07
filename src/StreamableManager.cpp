@@ -92,7 +92,7 @@ bool StreamableManager::load(Stream* src, StreamableDTO* dto, uint16_t lineNumSt
     }
     if (line) delete[] line;
   }
-  return true;
+  return dto->afterLoad();
 }
 
 StreamableDTO* StreamableManager::load(Stream* src, TypeMapper typeMapper) {
@@ -117,11 +117,10 @@ StreamableDTO* StreamableManager::load(Stream* src, TypeMapper typeMapper) {
     delete meta;      
     return nullptr;        
   }
-  if (dto->isCompatibleTypeAndVersion(meta)) {
-    load(src, dto, 1);
+  if (dto->isCompatibleTypeAndVersion(meta) && load(src, dto, 1)) {
     dto->_deserializedVer = meta->serialVersion;
   } else {
-    // Incorrect type or incompatible version
+    // Incorrect type, incompatible version, or other loading error
     delete dto;
     delete meta;      
     return nullptr;

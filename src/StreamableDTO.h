@@ -216,6 +216,13 @@ class StreamableDTO {
      */
     virtual bool toLine(const char* key, const char* value, bool keyPmem, bool valPmem, char* buffer, size_t bufferSize);
 
+    /*
+     * Default implementation does nothing. You may want to override to
+     * perform additional initialization after the field values have been
+     * loaded into the underlying hashtable.
+     */
+     virtual bool afterLoad() { return true; };
+
   };
  
 

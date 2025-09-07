@@ -14,6 +14,8 @@ parsing code for sending data between Arduinos or storing configuration data.
 - **Clean Data/Transport Separation:** Your data classes only include `StreamableDTO.h`. Business logic that involves 
   serial communication includes `StreamableManager.h`.
 - **Field-Level Access:** Easily work with individual fields by name using `put()` and `get()`—no custom parsers needed.
+- **Lifecycle Methods:** Add optional logic after all the fields have been loaded
+by implementing `afterLoad()`
 
 ### Installation
 
