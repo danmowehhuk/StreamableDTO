@@ -1,4 +1,13 @@
 #include "StreamableManager.h"
+#include "hal/StreamableDTOHal.h"
+
+#ifdef NO_ARDUINO
+// On Arduino these come in transitively via Arduino.h. Off Arduino, nothing
+// else pulls them in.
+#include <string.h>
+#include <ctype.h>
+#include <stdio.h>
+#endif
 
 char* StreamableManager::readLine(Stream* s, char terminator = '\n') {
   char* buffer = new char[_bufferBytes]();
@@ -8,9 +17,9 @@ char* StreamableManager::readLine(Stream* s, char terminator = '\n') {
     if (c == terminator || i >= _bufferBytes - 1) {
 #if defined(DEBUG)
       if (i >= _bufferBytes - 1) {
-        Serial.print(F("readLine: line truncated to "));
-        Serial.print(_bufferBytes);
-        Serial.println(F(" chars"));
+        StreamableDTOHal::print(F("readLine: line truncated to "));
+        StreamableDTOHal::print(_bufferBytes);
+        StreamableDTOHal::println(F(" chars"));
       }
 #endif
       break;
@@ -104,15 +113,15 @@ StreamableDTO* StreamableManager::load(Stream* src, TypeMapper typeMapper) {
   if (metaLine) delete[] metaLine;
   if (!meta) {
 #if defined(DEBUG)
-    Serial.println(F("ERROR: Could not determine type from stream"));
+    StreamableDTOHal::println(F("ERROR: Could not determine type from stream"));
 #endif
-    return nullptr;        
+    return nullptr;
   }
   StreamableDTO* dto = typeMapper(meta->typeId);
   if (!dto) {
 #if defined(DEBUG)
-    Serial.print(F("ERROR: Unknown typeId: "));
-    Serial.println(meta->typeId);
+    StreamableDTOHal::print(F("ERROR: Unknown typeId: "));
+    StreamableDTOHal::println(meta->typeId);
 #endif
     delete meta;      
     return nullptr;        
@@ -160,8 +169,8 @@ void StreamableManager::send(Stream* dest, StreamableDTO* dto, bool flowControl 
 void StreamableManager::pipe(Stream* src, Stream* dest, FilterFunction filter = nullptr, bool flowControl = false, void* state = nullptr) {
   if (!src) {
 #if (defined(DEBUG))
-    Serial.println(F("ERROR: StreamableManager::pipe src or dest stream is nullptr"));
-#endif    
+    StreamableDTOHal::println(F("ERROR: StreamableManager::pipe src or dest stream is nullptr"));
+#endif
     return;
   }
   DestinationStream out(dest);

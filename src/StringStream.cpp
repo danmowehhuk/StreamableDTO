@@ -1,8 +1,16 @@
 #include "StringStream.h"
 
+#ifdef NO_ARDUINO
+// On Arduino this comes in transitively via Arduino.h. Off Arduino, nothing
+// else pulls it in.
+#include <string.h>
+#endif
+
+#ifndef NO_ARDUINO
 StringStream::StringStream(const String& str) : _pos(0), _outStream(false) {
   initFromCString(str.c_str(), str.length());
 }
+#endif
 
 StringStream::StringStream(const char* str) : _pos(0), _outStream(false) {
   size_t len = strlen(str);
@@ -17,7 +25,7 @@ void StringStream::initFromCString(const char* str, size_t len) {
   _buffer[len] = '\0';
 }
 
-StringStream::StringStream(const __FlashStringHelper* fstr) : _pos(0), _outStream(false) {
+StringStream::StringStream(const FlashStr* fstr) : _pos(0), _outStream(false) {
   const char* progmemStr = reinterpret_cast<const char*>(fstr);
   size_t len = strlen_P(progmemStr);
   _capacity = len;
@@ -75,9 +83,11 @@ void StringStream::flush() {
   _pos = _length;
 }
 
+#ifndef NO_ARDUINO
 String StringStream::getString() {
   return String(_buffer);
 }
+#endif
 
 char* StringStream::get() {
   return _buffer;

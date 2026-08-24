@@ -13,7 +13,7 @@
 #define _strdto_StreamableDTO_h
 
 
-#include <Arduino.h>
+#include "hal/FlashStr.h"
 
 /*
  * A collection of arbitrary key-value pairs that is accessible with
@@ -57,7 +57,7 @@ class StreamableDTO {
      * regular memory
      */
     int hash(const char* key, bool pmem = false);
-    int hash(const __FlashStringHelper* key);
+    int hash(const FlashStr* key);
 
     /*
      * Raw hash function that returns the full hash value without modulo operation.
@@ -76,7 +76,7 @@ class StreamableDTO {
      * PROGMEM, then only pointer equality is checked.
      */
     bool keyMatches(const char* key, const Entry* entry, bool keyPmem);
-    bool keyMatches(const __FlashStringHelper* key, const Entry* entry);
+    bool keyMatches(const FlashStr* key, const Entry* entry);
 
     /*
      * Resize the table, rehashing all keys to redistribute entries.
@@ -105,20 +105,20 @@ class StreamableDTO {
      * update the value. Resize the table if necessary.
      */
     bool put(const char* key, const char* value, bool keyPmem = false, bool valPmem = false);
-    bool put(const char* key, const __FlashStringHelper* value, bool keyPmem = false);
+    bool put(const char* key, const FlashStr* value, bool keyPmem = false);
     bool put_P(const char* key, const char* value, bool valPmem = false);
-    bool put_P(const char* key, const __FlashStringHelper* value);
-    bool put(const __FlashStringHelper* key, const char* value, bool valPmem = false);
-    bool put(const __FlashStringHelper* key, const __FlashStringHelper* value);
+    bool put_P(const char* key, const FlashStr* value);
+    bool put(const FlashStr* key, const char* value, bool valPmem = false);
+    bool put(const FlashStr* key, const FlashStr* value);
     bool putEmpty(const char* key, bool pmemKey = false);
-    bool putEmpty(const __FlashStringHelper* key);
+    bool putEmpty(const FlashStr* key);
     bool putEmpty_P(const char* key);
 
     /*
      * Checks if a key exists in the table.
      */
     bool exists(const char* key, bool keyPmem = false) const;
-    bool exists(const __FlashStringHelper* key) const;
+    bool exists(const FlashStr* key) const;
     bool exists_P(const char* key) const;
 
     /*
@@ -129,7 +129,7 @@ class StreamableDTO {
      * Returns a nullptr if the key is not found.
      */
     char* get(const char* key, bool keyPmem = false) const;
-    char* get(const __FlashStringHelper* key) const;
+    char* get(const FlashStr* key) const;
     char* get_P(const char* key) const;
 
     /*
@@ -137,7 +137,7 @@ class StreamableDTO {
      * true if an entry was removed, otherwise false.
      */
     bool remove(const char* key, bool keyPmem = false);
-    bool remove(const __FlashStringHelper* key);
+    bool remove(const FlashStr* key);
     bool remove_P(const char* key);
 
     /*

@@ -1,8 +1,12 @@
 #ifndef _StringStream_h
 #define _StringStream_h
 
+#include "hal/Stream.h"
+#include "hal/FlashStr.h"
 
+#ifndef NO_ARDUINO
 #include <Arduino.h>
+#endif
 
 /*
  * A Stream backed by an in-memory string
@@ -10,10 +14,14 @@
 class StringStream : public Stream {
   public:
 
-    // Construct an input stream (source)
+#ifndef NO_ARDUINO
+    // Construct an input stream (source) from an Arduino String
     StringStream(const String& str);
+#endif
+
+    // Construct an input stream (source)
     StringStream(const char* str);
-    StringStream(const __FlashStringHelper* fstr);
+    StringStream(const FlashStr* fstr);
 
     // Construct an output stream (sink)
     // Default output stream is 128 bytes
@@ -28,9 +36,11 @@ class StringStream : public Stream {
     int available() override;
     int availableForWrite() override;
     int read() override;
-    int peek() override;
-    void flush() override;
+    int peek();
+    void flush();
+#ifndef NO_ARDUINO
     String getString();
+#endif
     char* get();
     void reset();
     void toInStream();
@@ -44,6 +54,5 @@ class StringStream : public Stream {
 
     void initFromCString(const char* str, size_t len);
 };
-
 
 #endif

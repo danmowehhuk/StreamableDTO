@@ -1,4 +1,13 @@
 #include "StreamableDTO.h"
+#include "hal/StreamableDTOHal.h"
+
+#ifdef NO_ARDUINO
+// On Arduino these come in transitively via Arduino.h. Off Arduino, nothing
+// else pulls them in.
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+#endif
 
 StreamableDTO::StreamableDTO() : _tableSize(INITIAL_TABLE_SIZE), _count(0) {
   _table = new Entry*[_tableSize]();
@@ -32,7 +41,7 @@ int StreamableDTO::hash(const char* key, bool pmem = false) {
   return h % _tableSize;
 }
 
-int StreamableDTO::hash(const __FlashStringHelper* key) {
+int StreamableDTO::hash(const FlashStr* key) {
   return hash(reinterpret_cast<const char*>(key), true);
 }
 
@@ -82,7 +91,7 @@ bool StreamableDTO::keyMatches(const char* key, const Entry* entry, bool keyPmem
   return keysMatch;
 }
 
-bool StreamableDTO::keyMatches(const __FlashStringHelper* key, const Entry* entry) {
+bool StreamableDTO::keyMatches(const FlashStr* key, const Entry* entry) {
   return keyMatches(reinterpret_cast<const char*>(key), entry, true);
 }
 
@@ -110,21 +119,21 @@ bool StreamableDTO::resize(int newSize) {
 bool StreamableDTO::isCompatibleTypeAndVersion(MetaInfo* meta) {
   if (getTypeId() != meta->typeId) {
 #if defined(DEBUG)
-    Serial.print(F("ERROR: Type mismatch! Can't load DTO typeId="));
-    Serial.print(meta->typeId);
-    Serial.print(F(" into typeId="));
-    Serial.println(getTypeId());
+    StreamableDTOHal::print(F("ERROR: Type mismatch! Can't load DTO typeId="));
+    StreamableDTOHal::print(meta->typeId);
+    StreamableDTOHal::print(F(" into typeId="));
+    StreamableDTOHal::println(getTypeId());
 #endif
     return false;
   }
   if (getMinCompatVersion() > meta->serialVersion) {
 #if defined(DEBUG)
-    Serial.print(F("ERROR: Incompatible version for DTO typeId="));
-    Serial.print(getTypeId());
-    Serial.print(F(", have DTO v"));
-    Serial.print(meta->serialVersion);
-    Serial.print(F(" but require >=v"));
-    Serial.println(getMinCompatVersion());
+    StreamableDTOHal::print(F("ERROR: Incompatible version for DTO typeId="));
+    StreamableDTOHal::print(getTypeId());
+    StreamableDTOHal::print(F(", have DTO v"));
+    StreamableDTOHal::print(meta->serialVersion);
+    StreamableDTOHal::print(F(" but require >=v"));
+    StreamableDTOHal::println(getMinCompatVersion());
 #endif
     return false;
   }
@@ -155,7 +164,7 @@ bool StreamableDTO::put(const char* key, const char* value, bool keyPmem = false
   if (static_cast<float>(_count) / _tableSize > _loadFactorThreshold) {
     if (!resize(_tableSize * 2)) {
 #if defined(DEBUG)
-      Serial.println(F("Hashtable resize failed!"));
+      StreamableDTOHal::println(F("Hashtable resize failed!"));
 #endif
       return false;
     }
@@ -163,15 +172,15 @@ bool StreamableDTO::put(const char* key, const char* value, bool keyPmem = false
   return true;
 }
 
-bool StreamableDTO::put(const char* key, const __FlashStringHelper* value, bool keyPmem = false) {
+bool StreamableDTO::put(const char* key, const FlashStr* value, bool keyPmem = false) {
   return put(key, reinterpret_cast<const char*>(value), keyPmem, true);
 }
 
-bool StreamableDTO::put(const __FlashStringHelper* key, const char* value, bool valPmem = false) {
+bool StreamableDTO::put(const FlashStr* key, const char* value, bool valPmem = false) {
   return put(reinterpret_cast<const char*>(key), value, true, valPmem);
 }
 
-bool StreamableDTO::put(const __FlashStringHelper* key, const __FlashStringHelper* value) {
+bool StreamableDTO::put(const FlashStr* key, const FlashStr* value) {
   return put(reinterpret_cast<const char*>(key), reinterpret_cast<const char*>(value), true, true);
 }
 
@@ -179,7 +188,7 @@ bool StreamableDTO::put_P(const char* key, const char* value, bool valPmem = fal
   return put(key, value, true, valPmem);
 }
 
-bool StreamableDTO::put_P(const char* key, const __FlashStringHelper* value) {
+bool StreamableDTO::put_P(const char* key, const FlashStr* value) {
   return put(key, reinterpret_cast<const char*>(value), true, true);
 }
 
@@ -187,7 +196,7 @@ bool StreamableDTO::putEmpty(const char* key, bool pmemKey = false) {
   return put(key, F(""), pmemKey);
 }
 
-bool StreamableDTO::putEmpty(const __FlashStringHelper* key) {
+bool StreamableDTO::putEmpty(const FlashStr* key) {
   return put(key, F(""));
 }
 
@@ -207,7 +216,7 @@ bool StreamableDTO::exists(const char* key, bool keyPmem = false) const {
   return false;
 }
 
-bool StreamableDTO::exists(const __FlashStringHelper* key) const {
+bool StreamableDTO::exists(const FlashStr* key) const {
   return exists(reinterpret_cast<const char*>(key), true);
 }
 
@@ -227,7 +236,7 @@ char* StreamableDTO::get(const char* key, bool keyPmem = false) const {
   return nullptr;
 }
 
-char* StreamableDTO::get(const __FlashStringHelper* key) const {
+char* StreamableDTO::get(const FlashStr* key) const {
   return get(reinterpret_cast<const char*>(key), true);
 }
 
@@ -256,7 +265,7 @@ bool StreamableDTO::remove(const char* key, bool keyPmem = false) {
   return false;
 }
 
-bool StreamableDTO::remove(const __FlashStringHelper* key) {
+bool StreamableDTO::remove(const FlashStr* key) {
   return remove(reinterpret_cast<const char*>(key), true);
 }
 
@@ -347,7 +356,7 @@ bool StreamableDTO::toLine(const char* key, const char* value, bool keyPmem, boo
 
   if (needed > bufferSize) {
 #if defined(DEBUG)
-    Serial.println(F("toLine: buffer too small"));
+    StreamableDTOHal::println(F("toLine: buffer too small"));
 #endif
     return false;
   }

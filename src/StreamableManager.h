@@ -13,7 +13,7 @@
 #define _strdto_StreamableManager_h
 
 
-#include <Arduino.h>
+#include "hal/Stream.h"
 #include "StreamableDTO.h"
 
 /*

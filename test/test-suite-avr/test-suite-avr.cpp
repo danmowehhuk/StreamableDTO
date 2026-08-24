@@ -1,9 +1,18 @@
+// Bare-metal AVR port of ../test-suite/test-suite.ino - same StreamableDTO/
+// StreamableManager/StringStream test suite, run against TestTool/
+// BareMetalHAL linked for NO_ARDUINO+HAL_AVR. Reuses ../test-suite/
+// HashtableTestHelper.h and MyTypedDTO.h unchanged (neither has any
+// Arduino dependency). Tests that built their input data with Arduino's
+// String class on the Arduino branch instead build it directly via
+// StringStream's FlashStr/const char* constructors here, since String
+// isn't available off Arduino.
+#include <BareMetalHAL.h>
 #include <StreamableDTO.h>
 #include <StreamableManager.h>
 #include <StringStream.h>
 #include <TestTool.h>
-#include "HashtableTestHelper.h"
-#include "MyTypedDTO.h"
+#include "../test-suite/HashtableTestHelper.h"
+#include "../test-suite/MyTypedDTO.h"
 
 StreamableManager streamMgr;
 HashtableTestHelper helper;
@@ -45,14 +54,14 @@ void testHashFunction(TestInvocation* t) {
   t->setName(F("Hash function"));
   StreamableDTO table;
   int oneHash = helper.hash(&table, REGMEM_KEY, false);
-  t->verify(oneHash == helper.hash(&table, PMEM_KEY, true), 
+  t->verify(oneHash == helper.hash(&table, PMEM_KEY, true),
       F("Hash from PROGMEM different from regular memory"));
 }
 
 void testKeyMatch(TestInvocation* t) {
   t->setName(F("Key matcher"));
   StreamableDTO table;
-  t->verify(helper.keyMatches(&table, REGMEM_KEY, false, PMEM_KEY, PMEM_VAL, true, true), 
+  t->verify(helper.keyMatches(&table, REGMEM_KEY, false, PMEM_KEY, PMEM_VAL, true, true),
       F("Reg mem key didn't match PROGMEM entry->key"));
   t->verify(helper.keyMatches(&table, PMEM_KEY, true, PMEM_KEY, PMEM_VAL, true, true),
       F("PROGMEM key didn't match PROGMEM entry->key"));
@@ -64,30 +73,30 @@ void testKeyMatch(TestInvocation* t) {
 
 void testKeyMatchPROGMEMvsPROGMEM(TestInvocation* t) {
   t->setName(F("PROGMEM vs PROGMEM key matching (infinite loop fix)"));
-  
+
   // Test the specific scenario that had the infinite loop bug
   // Two different PROGMEM strings with the same content
   static const char PROGMEM_KEY_A[] PROGMEM = "testKey";
   static const char PROGMEM_KEY_B[] PROGMEM = "testKey";
-  
+
   StreamableDTO table;
-  
+
   // These should be different pointers but same content
   t->verify(PROGMEM_KEY_A != PROGMEM_KEY_B, F("PROGMEM keys should be different pointers"));
-  
+
   // Test that keyMatches works correctly for this scenario
   bool matches = helper.keyMatches(&table, PROGMEM_KEY_A, true, PROGMEM_KEY_B, PMEM_VAL, true, true);
   t->verify(matches, F("PROGMEM vs PROGMEM key matching failed"));
-  
+
   // Test the reverse direction
   matches = helper.keyMatches(&table, PROGMEM_KEY_B, true, PROGMEM_KEY_A, PMEM_VAL, true, true);
   t->verify(matches, F("PROGMEM vs PROGMEM key matching failed (reverse)"));
-  
+
   // Test with different content
   static const char PROGMEM_KEY_C[] PROGMEM = "different";
   matches = helper.keyMatches(&table, PROGMEM_KEY_A, true, PROGMEM_KEY_C, PMEM_VAL, true, true);
   t->verify(!matches, F("PROGMEM vs PROGMEM should not match different content"));
-  
+
   // Test with same pointer (should be fast path)
   matches = helper.keyMatches(&table, PROGMEM_KEY_A, true, PROGMEM_KEY_A, PMEM_VAL, true, true);
   t->verify(matches, F("PROGMEM vs PROGMEM same pointer should match"));
@@ -100,7 +109,7 @@ void testPut(TestInvocation* t) {
   table.put(PMEM_KEY, REGMEM_VAL, true, false); // update
   int entryCount = helper.getEntryCount(&table);
   t->verify(entryCount == 1, F("Incorrect entry count"));
-  t->verify(helper.verifyEntryCount(&table, entryCount), 
+  t->verify(helper.verifyEntryCount(&table, entryCount),
       F("Hashtable count does not match actual entry count"));
 }
 
@@ -131,7 +140,7 @@ void testGet(TestInvocation* t) {
   t->verifyEqual(table.get("foo"), F("bar"));
   char* retrieved = table.get(F("xyz"));
   t->verify(retrieved, F("F() value retrieval failed"));
-  t->verifyEqual(reinterpret_cast<const __FlashStringHelper*>(retrieved), F("def"));
+  t->verifyEqual(reinterpret_cast<const FlashStr*>(retrieved), F("def"));
   t->verify(!table.get("abc"), F("Get unknown key should return nullptr"));
 }
 
@@ -152,7 +161,7 @@ void testClear(TestInvocation* t) {
   table.put("abc","def");
   table.put("ghi","jkl");
   int entryCount = helper.getEntryCount(&table);
-  t->verify((entryCount == 2 && helper.verifyEntryCount(&table, entryCount)), 
+  t->verify((entryCount == 2 && helper.verifyEntryCount(&table, entryCount)),
       F("Hashtable entry count should be 2"));
   table.clear();
   entryCount = helper.getEntryCount(&table);
@@ -167,14 +176,14 @@ void testResize(TestInvocation* t) {
   table.put(F("abc"),F("def"));
   table.put(F("ghi"),F("jkl"));
 
-  // Fix F() value comparisons - cast to __FlashStringHelper* for proper PROGMEM comparison
-  const __FlashStringHelper* keys[] = {F("abc"), F("ghi")};
-  const __FlashStringHelper* expectedValues[] = {F("def"), F("jkl")};
-  
+  // Fix F() value comparisons - cast to FlashStr* for proper PROGMEM comparison
+  const FlashStr* keys[] = {F("abc"), F("ghi")};
+  const FlashStr* expectedValues[] = {F("def"), F("jkl")};
+
   for (int i = 0; i < 2; i++) {
     char* retrieved = table.get(keys[i]);
     t->verify(retrieved != nullptr, F("F() value retrieval failed"));
-    t->verifyEqual(reinterpret_cast<const __FlashStringHelper*>(retrieved), expectedValues[i]);
+    t->verifyEqual(reinterpret_cast<const FlashStr*>(retrieved), expectedValues[i]);
   }
 
   t->verify(table.exists(F("abc")), F("abc should exist"));
@@ -184,14 +193,14 @@ void testResize(TestInvocation* t) {
   t->verify(helper.getTableSize(&table) == 4, F("Table size should still be 4"));
   table.put(F("mno"),F("pqr")); // push it over 70% load
 
-  // Fix F() value comparisons - cast to __FlashStringHelper* for proper PROGMEM comparison
-  const __FlashStringHelper* keys2[] = {F("abc"), F("ghi"), F("mno")};
-  const __FlashStringHelper* expectedValues2[] = {F("def"), F("jkl"), F("pqr")};
-  
+  // Fix F() value comparisons - cast to FlashStr* for proper PROGMEM comparison
+  const FlashStr* keys2[] = {F("abc"), F("ghi"), F("mno")};
+  const FlashStr* expectedValues2[] = {F("def"), F("jkl"), F("pqr")};
+
   for (int i = 0; i < 3; i++) {
     char* retrieved = table.get(keys2[i]);
     t->verify(retrieved != nullptr, F("F() value retrieval failed"));
-    t->verifyEqual(reinterpret_cast<const __FlashStringHelper*>(retrieved), expectedValues2[i]);
+    t->verifyEqual(reinterpret_cast<const FlashStr*>(retrieved), expectedValues2[i]);
   }
 
   t->verify(helper.getTableSize(&table) == 8, F("Table size should have doubled"));
@@ -211,8 +220,7 @@ void testResize(TestInvocation* t) {
 
 void testLoadUntypedStreamableDTO(TestInvocation* t) {
   t->setName(F("Load untyped StreamableDTO"));
-  String data = F("foo=bar\nabc=def\n");
-  StringStream ss(data);
+  StringStream ss(F("foo=bar\nabc=def\n"));
   StreamableDTO* dto = new StreamableDTO();
   t->verify(streamMgr.load(&ss, dto), F("DTO load failed"));
   t->verify((dto->exists("foo") && dto->exists(F("abc"))), F("Missing key(s)"));
@@ -223,36 +231,32 @@ void testLoadUntypedStreamableDTO(TestInvocation* t) {
 
 void testLoadLongLine(TestInvocation* t) {
   t->setName(F("Long line untyped StreamableDTO"));
-  String longValue = F("this is a long line this is a long line this is a long line this is a long line this is a long line");
-  String data = String(F("foo=bar\nabc=")) + longValue + String(F("\n"));
-  StringStream ss(data);
+  StringStream ss(F("foo=bar\nabc=this is a long line this is a long line this is a long line this is a long line this is a long line\n"));
   StreamableDTO* dto = new StreamableDTO();
   streamMgr.load(&ss, dto);
   t->verify((dto->exists(F("foo")) && dto->exists("abc")), F("Missing key(s)"));
   t->verifyEqual(dto->get("foo"), "bar");
-  t->verify(String(dto->get("abc")).length() == 59, // 64 minus 'abc=' minus terminator
+  t->verify(strlen(dto->get("abc")) == 59, // 64 minus 'abc=' minus terminator
       F("Values for key 'abc' should have been truncated"));
   delete dto;
 }
 
 void testSendUntypedStreamableDTO(TestInvocation* t) {
   t->setName(F("Send untyped StreamableDTO"));
-  String data = F("foo=bar\nabc=def\n");
-  StringStream src(data);
+  StringStream src(F("foo=bar\nabc=def\n"));
   StringStream dest;
   StreamableDTO* dto = new StreamableDTO();
   t->verify(streamMgr.load(&src, dto), F("DTO load failed"));
   streamMgr.send(&dest, dto);
-  t->verify(dest.getString().length() == data.length(), F("Output length does not match input"));
-  t->verify(dest.getString().indexOf(F("foo=bar")) != -1, F("foo=bar missing from output"));
-  t->verify(dest.getString().indexOf(F("abc=def")) != -1, F("abc=def missing from output"));
+  t->verify(strlen(dest.get()) == strlen(src.get()), F("Output length does not match input"));
+  t->verify(strstr(dest.get(), "foo=bar") != nullptr, F("foo=bar missing from output"));
+  t->verify(strstr(dest.get(), "abc=def") != nullptr, F("abc=def missing from output"));
   delete dto;
 }
 
 void testLoadTypedStreamableDTO(TestInvocation* t) {
   t->setName(F("Load typed StreamableDTO"));
-  String data = F("__tvid=1|2\nfoo=bar\nabc=def\n");
-  StringStream ss(data);
+  StringStream ss(F("__tvid=1|2\nfoo=bar\nabc=def\n"));
   StreamableDTO* dto = streamMgr.load(&ss, typeMapper);
   t->verify(dto, F("Failed to load MyTypedDTO"));
   t->verify((dto->exists("foo") && dto->exists("abc")), F("Missing key(s)"));
@@ -268,8 +272,7 @@ void testSendTypedStreamableDTO(TestInvocation* t) {
   dtoSent.put("abc", "def");
   StringStream dest;
   streamMgr.send(&dest, &dtoSent);
-  String sentDto = dest.getString();
-  StringStream src(sentDto);
+  StringStream src(dest.get());
   StreamableDTO* dtoRcvd = streamMgr.load(&src, typeMapper);
   t->verify(dtoRcvd, F("Failed to load MyTypedDTO"));
   t->verify((dtoRcvd->exists("foo") && dtoRcvd->exists("abc")), F("Missing key(s)"));
@@ -280,8 +283,7 @@ void testSendTypedStreamableDTO(TestInvocation* t) {
 
 void testLoadIncorrectType(TestInvocation* t) {
   t->setName(F("Load incorrect type"));
-  String data = F("__tvid=2|0\nfoo=bar\nabc=def\n");
-  StringStream ss(data);
+  StringStream ss(F("__tvid=2|0\nfoo=bar\nabc=def\n"));
   StreamableDTO* dto = streamMgr.load(&ss, typeMapper);
   t->verify(!dto, F("Should have failed to load DTO"));
   delete dto;
@@ -289,8 +291,7 @@ void testLoadIncorrectType(TestInvocation* t) {
 
 void testLoadIncompatibleVersion(TestInvocation* t) {
   t->setName(F("Load incompatible version"));
-  String data = F("__tvid=1|1\nfoo=bar\nabc=def\n");
-  StringStream ss(data);
+  StringStream ss(F("__tvid=1|1\nfoo=bar\nabc=def\n"));
   StreamableDTO* dto = streamMgr.load(&ss, typeMapper);
   t->verify(!dto, F("Should have failed to load DTO"));
   delete dto;
@@ -307,12 +308,12 @@ void testMemoryBehavior(TestInvocation* t) {
   char* storedFlashRam = dto.get(PMEM_KEY);
   t->verify(storedFlashRam != nullptr, F("get Flash->RAM failed"));
   t->verify(storedFlashRam != REGMEM_VAL, F("Flash->RAM value should be copied"));
-  t->verify(dto.put(REGMEM_KEY, reinterpret_cast<const __FlashStringHelper*>(PMEM_VAL)), F("put RAM->Flash failed"));
+  t->verify(dto.put(REGMEM_KEY, reinterpret_cast<const FlashStr*>(PMEM_VAL)), F("put RAM->Flash failed"));
   char* storedRamFlash = dto.get(REGMEM_KEY);
   t->verify(storedRamFlash != nullptr, F("get RAM->Flash failed"));
   t->verify(storedRamFlash == PMEM_VAL, F("RAM->Flash should store flash pointer"));
-  t->verify(dto.put(reinterpret_cast<const __FlashStringHelper*>(PMEM_KEY),
-      reinterpret_cast<const __FlashStringHelper*>(PMEM_VAL)), F("put Flash->Flash failed"));
+  t->verify(dto.put(reinterpret_cast<const FlashStr*>(PMEM_KEY),
+      reinterpret_cast<const FlashStr*>(PMEM_VAL)), F("put Flash->Flash failed"));
   char* storedFlashFlash = dto.get(PMEM_KEY, true);
   t->verify(storedFlashFlash != nullptr, F("get Flash->Flash failed"));
   t->verify(storedFlashFlash == PMEM_VAL, F("Flash->Flash should store flash pointer"));
@@ -339,10 +340,8 @@ void testDestructionSafety(TestInvocation* t) {
   t->verify(true, F("StreamableDTO destruction completed safely"));
 }
 
-
-void setup() {
-  Serial.begin(9600);
-  while (!Serial);
+int main() {
+  BareMetalHAL::Uart0::begin(9600);
 
   TestFunction tests[] = {
     testDefaultConstructor,
@@ -364,11 +363,11 @@ void setup() {
     testLoadIncorrectType,
     testLoadIncompatibleVersion,
     testMemoryBehavior,
-    testDestructionSafety    
+    testDestructionSafety
   };
 
   runTestSuiteShowMem(tests);
 
+  while (true) {}
+  return 0;
 }
-
-void loop() {}
