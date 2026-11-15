@@ -9,7 +9,7 @@
 #include <stdio.h>
 #endif
 
-char* StreamableManager::readLine(Stream* s, char terminator = '\n') {
+char* StreamableManager::readLine(Stream* s, char terminator) {
   char* buffer = new char[_bufferBytes]();
   uint8_t i = 0;
   while (s->available()) {
@@ -61,7 +61,7 @@ void StreamableManager::sendWithoutFlowControl(const char* line, Stream* dest) {
   dest->write('\n');
 }
 
-void StreamableManager::sendMetaLine(StreamableDTO* dto, Stream* dest, bool flowControl = false) {
+void StreamableManager::sendMetaLine(StreamableDTO* dto, Stream* dest, bool flowControl) {
   constexpr size_t keyLen = 6;
   char key[keyLen + 1];
   strcpy_P(key, PSTR("__tvid"));
@@ -78,7 +78,7 @@ void StreamableManager::sendMetaLine(StreamableDTO* dto, Stream* dest, bool flow
   }
 }
 
-bool StreamableManager::load(Stream* src, StreamableDTO* dto, uint16_t lineNumStart = 0) {
+bool StreamableManager::load(Stream* src, StreamableDTO* dto, uint16_t lineNumStart) {
   uint16_t lineNumber = lineNumStart;
   while (src->available()) {
     char* line = readLine(src);
@@ -138,7 +138,7 @@ StreamableDTO* StreamableManager::load(Stream* src, TypeMapper typeMapper) {
   return dto;
 }
 
-void StreamableManager::send(Stream* dest, StreamableDTO* dto, bool flowControl = false) {
+void StreamableManager::send(Stream* dest, StreamableDTO* dto, bool flowControl) {
   if (dto->getTypeId() != -1) {
     sendMetaLine(dto, dest, flowControl);
   }
@@ -166,7 +166,7 @@ void StreamableManager::send(Stream* dest, StreamableDTO* dto, bool flowControl 
   dto->processEntries(entryProcessor, &capture);
 }
 
-void StreamableManager::pipe(Stream* src, Stream* dest, FilterFunction filter = nullptr, bool flowControl = false, void* state = nullptr) {
+void StreamableManager::pipe(Stream* src, Stream* dest, FilterFunction filter, bool flowControl, void* state) {
   if (!src) {
 #if (defined(DEBUG))
     StreamableDTOHal::println(F("ERROR: StreamableManager::pipe src or dest stream is nullptr"));

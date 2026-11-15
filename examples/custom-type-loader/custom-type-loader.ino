@@ -20,7 +20,7 @@ StringStream stream(_citrStr);
  * A type mapping function that returns an instance of the
  * correct sub-class
  */
-StreamableDTO* typeMapper(uint16_t typeId) {
+StreamableDTO* typeMapper(int16_t typeId) {
   StreamableDTO* dto = nullptr;
   switch (typeId) {
     case 1: // You are responsible for making your typeIds unique

@@ -14,7 +14,7 @@ static const char REGMEM_KEY[]         = "myKey";
 static const char PMEM_VAL[]   PROGMEM = "myVal-pmem";
 static const char REGMEM_VAL[]         = "myVal-regm";
 
-StreamableDTO* typeMapper(uint16_t typeId) {
+StreamableDTO* typeMapper(int16_t typeId) {
   StreamableDTO* dto = nullptr;
   switch (typeId) {
     case 1:
