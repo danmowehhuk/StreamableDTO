@@ -246,7 +246,7 @@ instantiate the object and whether it can parse it.
 `TypeMapper` function that knows how to create a new object of the correct subclass given a type ID. This is essentially
 a factory for your `StreamableDTO` types. For example:
 ```cpp
-StreamableDTO* createDTOByType(uint16_t typeId) {
+StreamableDTO* createDTOByType(int16_t typeId) {
   switch (typeId) {
     case BOOK_TYPE_ID:
       return new Book();
@@ -273,7 +273,7 @@ Here are common usage patterns for `StreamableManager`:
 given DTO object’s fields.
 - **Loading with Type Mapping**: Use `load(Stream* src, TypeMapper func)` to read from the source and automatically 
 create a new DTO of the appropriate subclass based on the type ID in the data. `TypeMapper` is a function with signature
-`StreamableDTO* func(uint16_t typeId)` (like the `createDTOByType` factory described above).
+`StreamableDTO* func(int16_t typeId)` (like the `createDTOByType` factory described above).
 
 Because StreamableManager works with Arduino `Stream` objects, you can use it with any source or destination: `Serial`,
 `SoftwareSerial`, `File` (SD card), etc. The library also provides a `StringStream` class, which is extremely handy for 

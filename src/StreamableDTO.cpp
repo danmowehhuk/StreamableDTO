@@ -13,7 +13,7 @@ StreamableDTO::StreamableDTO() : _tableSize(INITIAL_TABLE_SIZE), _count(0) {
   _table = new Entry*[_tableSize]();
 }
 
-StreamableDTO::StreamableDTO(size_t initialCapacity, float loadFactor = 0.7) 
+StreamableDTO::StreamableDTO(size_t initialCapacity, float loadFactor) 
     : _tableSize(initialCapacity), _count(0), _loadFactorThreshold(loadFactor) {
   _table = new Entry*[_tableSize]();
 }
@@ -26,22 +26,22 @@ StreamableDTO::StreamableDTO(size_t initialCapacity, float loadFactor = 0.7)
 StreamableDTO::Entry::Entry(const char* k, const char* v, bool keyPmem, bool valPmem):
     key(nullptr), value(nullptr), next(nullptr), keyPmem(keyPmem), valPmem(valPmem) {
   key = keyPmem ? k : strdup(k);
-  value = valPmem ? v : strdup(v);
+  value = valPmem ? const_cast<char*>(v) : strdup(v);
   
 
 }
 
 StreamableDTO::Entry::~Entry() {
-  if (key && !keyPmem) free(key); // strdup'ed char* requires free, not delete
+  if (key && !keyPmem) free(const_cast<char*>(key)); // strdup'ed char* requires free, not delete
   if (value && !valPmem) free(value);
 };
 
-int StreamableDTO::hash(const char* key, bool pmem = false) {
+int StreamableDTO::hash(const char* key, bool pmem) const {
   unsigned long h = rawHash(key, pmem);
   return h % _tableSize;
 }
 
-int StreamableDTO::hash(const FlashStr* key) {
+int StreamableDTO::hash(const FlashStr* key) const {
   return hash(reinterpret_cast<const char*>(key), true);
 }
 
@@ -55,7 +55,7 @@ unsigned long StreamableDTO::rawHash(const char* key, bool pmem) const {
   return h;
 }
 
-bool StreamableDTO::keyMatches(const char* key, const Entry* entry, bool keyPmem) {
+bool StreamableDTO::keyMatches(const char* key, const Entry* entry, bool keyPmem) const {
   bool keysMatch = false;
   if (keyPmem) {
     if (entry->keyPmem) {
@@ -91,7 +91,7 @@ bool StreamableDTO::keyMatches(const char* key, const Entry* entry, bool keyPmem
   return keysMatch;
 }
 
-bool StreamableDTO::keyMatches(const FlashStr* key, const Entry* entry) {
+bool StreamableDTO::keyMatches(const FlashStr* key, const Entry* entry) const {
   return keyMatches(reinterpret_cast<const char*>(key), entry, true);
 }
 
@@ -140,14 +140,14 @@ bool StreamableDTO::isCompatibleTypeAndVersion(MetaInfo* meta) {
   return true;
 }
 
-bool StreamableDTO::put(const char* key, const char* value, bool keyPmem = false, bool valPmem = false) {
+bool StreamableDTO::put(const char* key, const char* value, bool keyPmem, bool valPmem) {
   int index = hash(key, keyPmem);
   Entry* entry = _table[index];
   while (entry != nullptr) {
     if (keyMatches(key, entry, keyPmem)) {
       if (!entry->valPmem) free(entry->value); // strdup'ed char* requires free not delete
       if (valPmem) {
-        entry->value = value;
+        entry->value = const_cast<char*>(value);
       } else {
         entry->value = strdup(value);
       }
@@ -172,11 +172,11 @@ bool StreamableDTO::put(const char* key, const char* value, bool keyPmem = false
   return true;
 }
 
-bool StreamableDTO::put(const char* key, const FlashStr* value, bool keyPmem = false) {
+bool StreamableDTO::put(const char* key, const FlashStr* value, bool keyPmem) {
   return put(key, reinterpret_cast<const char*>(value), keyPmem, true);
 }
 
-bool StreamableDTO::put(const FlashStr* key, const char* value, bool valPmem = false) {
+bool StreamableDTO::put(const FlashStr* key, const char* value, bool valPmem) {
   return put(reinterpret_cast<const char*>(key), value, true, valPmem);
 }
 
@@ -184,7 +184,7 @@ bool StreamableDTO::put(const FlashStr* key, const FlashStr* value) {
   return put(reinterpret_cast<const char*>(key), reinterpret_cast<const char*>(value), true, true);
 }
 
-bool StreamableDTO::put_P(const char* key, const char* value, bool valPmem = false) {
+bool StreamableDTO::put_P(const char* key, const char* value, bool valPmem) {
   return put(key, value, true, valPmem);
 }
 
@@ -192,7 +192,7 @@ bool StreamableDTO::put_P(const char* key, const FlashStr* value) {
   return put(key, reinterpret_cast<const char*>(value), true, true);
 }
 
-bool StreamableDTO::putEmpty(const char* key, bool pmemKey = false) {
+bool StreamableDTO::putEmpty(const char* key, bool pmemKey) {
   return put(key, F(""), pmemKey);
 }
 
@@ -204,7 +204,7 @@ bool StreamableDTO::putEmpty_P(const char* key) {
   return put(key, F(""), true);
 }
 
-bool StreamableDTO::exists(const char* key, bool keyPmem = false) const {
+bool StreamableDTO::exists(const char* key, bool keyPmem) const {
   int index = hash(key, keyPmem);
   Entry* entry = _table[index];
   while (entry != nullptr) {
@@ -224,7 +224,7 @@ bool StreamableDTO::exists_P(const char* key) const {
   return exists(key, true);
 }
 
-char* StreamableDTO::get(const char* key, bool keyPmem = false) const {
+char* StreamableDTO::get(const char* key, bool keyPmem) const {
   int index = hash(key, keyPmem);
   Entry* entry = _table[index];
   while (entry != nullptr) {
@@ -244,7 +244,7 @@ char* StreamableDTO::get_P(const char* key) const {
   return get(key, true);
 }
 
-bool StreamableDTO::remove(const char* key, bool keyPmem = false) {
+bool StreamableDTO::remove(const char* key, bool keyPmem) {
   int index = hash(key, keyPmem);
   Entry* current = _table[index];
   Entry* prev = nullptr;
@@ -290,7 +290,7 @@ bool StreamableDTO::clear() {
   return true;
 }
 
-bool StreamableDTO::processEntries(EntryProcessor entryProcessor, void* capture = nullptr) {
+bool StreamableDTO::processEntries(EntryProcessor entryProcessor, void* capture) {
   for (int i = 0; i < _tableSize; ++i) {
     Entry* entry = _table[i];
     while (entry != nullptr) {
@@ -343,7 +343,7 @@ bool StreamableDTO::parseLine(uint16_t lineNumber, const char* line) {
   return true;
 }
 
-void StreamableDTO::parseValue(uint16_t lineNumber, const char* key, const char* value) {
+void StreamableDTO::parseValue(uint16_t, const char* key, const char* value) {
   put(key, value);
 }
 

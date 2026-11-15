@@ -23,7 +23,7 @@ static const char REGMEM_KEY[]         = "myKey";
 static const char PMEM_VAL[]   PROGMEM = "myVal-pmem";
 static const char REGMEM_VAL[]         = "myVal-regm";
 
-StreamableDTO* typeMapper(uint16_t typeId) {
+StreamableDTO* typeMapper(int16_t typeId) {
   StreamableDTO* dto = nullptr;
   switch (typeId) {
     case 1:
@@ -297,6 +297,13 @@ void testLoadIncompatibleVersion(TestInvocation* t) {
   delete dto;
 }
 
+void testLoadEmptyStream(TestInvocation* t) {
+  t->setName(F("Load empty stream"));
+  StringStream ss;
+  StreamableDTO* dto = streamMgr.load(&ss, typeMapper);
+  t->verify(!dto, F("Should have failed to load DTO"));
+}
+
 void testMemoryBehavior(TestInvocation* t) {
   t->setName(F("StreamableDTO Memory Behavior"));
   StreamableDTO dto;
@@ -362,6 +369,7 @@ int main() {
     testSendTypedStreamableDTO,
     testLoadIncorrectType,
     testLoadIncompatibleVersion,
+    testLoadEmptyStream,
     testMemoryBehavior,
     testDestructionSafety
   };

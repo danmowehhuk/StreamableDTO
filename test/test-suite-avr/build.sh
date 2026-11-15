@@ -76,10 +76,7 @@ if [ ! -f "$TESTTOOL_SRC/TestTool.h" ]; then
   exit 1
 fi
 
-# -fpermissive matches Arduino's own default AVR cpp flags (platform.txt's
-# compiler.cpp.flags) - needed for pre-existing const-correctness issues
-# in this library that predate the HAL migration.
-CFLAGS=(-std=gnu++11 -Wall -Wextra -fpermissive -Os -DNO_ARDUINO -DHAL_AVR -DDEBUG -ffunction-sections -fdata-sections -DF_CPU=16000000UL -mmcu=atmega2560 -I "$DIR/../../src" -I "$BAREMETALHAL_SRC" -I "$TESTTOOL_SRC")
+CFLAGS=(-std=gnu++11 -Wall -Wextra -Os -DNO_ARDUINO -DHAL_AVR -DDEBUG -ffunction-sections -fdata-sections -DF_CPU=16000000UL -mmcu=atmega2560 -I "$DIR/../../src" -I "$BAREMETALHAL_SRC" -I "$TESTTOOL_SRC")
 
 mkdir -p "$OBJ_DIR"
 

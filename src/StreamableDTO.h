@@ -29,6 +29,8 @@ class StreamableDTO {
 
   private:
 
+    // key and value are strdup'ed copies, or the caller's PROGMEM strings
+    // when keyPmem/valPmem is set. Only the copies are freed.
     struct Entry {
       const char* key;
       char* value;
@@ -56,8 +58,8 @@ class StreamableDTO {
      * caller must indicate whether the key is a pointer to PROGMEM or
      * regular memory
      */
-    int hash(const char* key, bool pmem = false);
-    int hash(const FlashStr* key);
+    int hash(const char* key, bool pmem = false) const;
+    int hash(const FlashStr* key) const;
 
     /*
      * Raw hash function that returns the full hash value without modulo operation.
@@ -75,8 +77,8 @@ class StreamableDTO {
      * For efficiency, if both the passed key and the entry->key are in
      * PROGMEM, then only pointer equality is checked.
      */
-    bool keyMatches(const char* key, const Entry* entry, bool keyPmem);
-    bool keyMatches(const FlashStr* key, const Entry* entry);
+    bool keyMatches(const char* key, const Entry* entry, bool keyPmem) const;
+    bool keyMatches(const FlashStr* key, const Entry* entry) const;
 
     /*
      * Resize the table, rehashing all keys to redistribute entries.
@@ -149,7 +151,7 @@ class StreamableDTO {
     /*
      * The serial version of the loaded DTO, if it was typed
      */
-    const uint8_t getDeserializedVersion() {
+    uint8_t getDeserializedVersion() {
       return _deserializedVer;
     }
 
