@@ -296,6 +296,13 @@ void testLoadIncompatibleVersion(TestInvocation* t) {
   delete dto;
 }
 
+void testLoadEmptyStream(TestInvocation* t) {
+  t->setName(F("Load empty stream"));
+  StringStream ss;
+  StreamableDTO* dto = streamMgr.load(&ss, typeMapper);
+  t->verify(!dto, F("Should have failed to load DTO"));
+}
+
 void testMemoryBehavior(TestInvocation* t) {
   t->setName(F("StreamableDTO Memory Behavior"));
   StreamableDTO dto;
@@ -363,6 +370,7 @@ void setup() {
     testSendTypedStreamableDTO,
     testLoadIncorrectType,
     testLoadIncompatibleVersion,
+    testLoadEmptyStream,
     testMemoryBehavior,
     testDestructionSafety    
   };

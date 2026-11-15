@@ -105,11 +105,11 @@ bool StreamableManager::load(Stream* src, StreamableDTO* dto, uint16_t lineNumSt
 }
 
 StreamableDTO* StreamableManager::load(Stream* src, TypeMapper typeMapper) {
-  char* metaLine;
+  char* metaLine = nullptr;
   if (src->available()) {
     metaLine = readLine(src);
   }
-  StreamableDTO::MetaInfo* meta = StreamableDTO::parseMetaLine(metaLine);
+  StreamableDTO::MetaInfo* meta = metaLine ? StreamableDTO::parseMetaLine(metaLine) : nullptr;
   if (metaLine) delete[] metaLine;
   if (!meta) {
 #if defined(DEBUG)
