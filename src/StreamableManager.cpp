@@ -85,14 +85,12 @@ bool StreamableManager::load(Stream* src, StreamableDTO* dto, uint16_t lineNumSt
     if (lineNumber == 0) {
       StreamableDTO::MetaInfo* meta = dto->parseMetaLine(line);
       if (meta) {
-        if (dto->isCompatibleTypeAndVersion(meta)) {
-          delete meta;
-          lineNumber++;
-          continue;
-        } else {
-          if (line) delete[] line;
-          return false; // incompatible type or version
-        }
+        bool compatible = dto->isCompatibleTypeAndVersion(meta);
+        delete meta;
+        delete[] line;
+        if (!compatible) return false;
+        lineNumber++;
+        continue;
       }
     }
     if (!dto->parseLine(lineNumber++, line)) {

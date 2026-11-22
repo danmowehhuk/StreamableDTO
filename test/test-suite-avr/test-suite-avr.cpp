@@ -297,6 +297,35 @@ void testLoadIncompatibleVersion(TestInvocation* t) {
   delete dto;
 }
 
+// Loads text into a new MyTypedDTO, as a caller that knows the type does.
+// Returns whether the load succeeded.
+bool loadIntoTypedDTO(const FlashStr* text) {
+  StringStream ss(text);
+  MyTypedDTO dto;
+  return streamMgr.load(&ss, &dto);
+}
+
+void testLoadIntoTypedDTOFreesMemory(TestInvocation* t) {
+  t->setName(F("Load into a typed DTO frees its memory"));
+  // The first load may leave the heap's top higher, so measure after it.
+  loadIntoTypedDTO(F("__tvid=1|4\nfoo=bar\n"));
+  int before = TestToolHal::freeMemory();
+  for (uint8_t i = 0; i < 3; i++) {
+    t->verify(loadIntoTypedDTO(F("__tvid=1|4\nfoo=bar\n")), F("DTO load failed"));
+  }
+  t->verify(TestToolHal::freeMemory() == before, F("free memory should return"));
+}
+
+void testRefusedLoadIntoTypedDTOFreesMemory(TestInvocation* t) {
+  t->setName(F("Refused load into a typed DTO frees memory"));
+  loadIntoTypedDTO(F("__tvid=1|1\nfoo=bar\n"));
+  int before = TestToolHal::freeMemory();
+  for (uint8_t i = 0; i < 3; i++) {
+    t->verify(!loadIntoTypedDTO(F("__tvid=1|1\nfoo=bar\n")), F("version 1 should be refused"));
+  }
+  t->verify(TestToolHal::freeMemory() == before, F("free memory should return"));
+}
+
 void testLoadEmptyStream(TestInvocation* t) {
   t->setName(F("Load empty stream"));
   StringStream ss;
@@ -369,6 +398,8 @@ int main() {
     testSendTypedStreamableDTO,
     testLoadIncorrectType,
     testLoadIncompatibleVersion,
+    testLoadIntoTypedDTOFreesMemory,
+    testRefusedLoadIntoTypedDTOFreesMemory,
     testLoadEmptyStream,
     testMemoryBehavior,
     testDestructionSafety
