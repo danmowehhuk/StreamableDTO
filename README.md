@@ -191,6 +191,13 @@ By extending `StreamableDTO` in this way, you get a cleaner API for your DTO and
 represented in the serialized form. (See the [examples/custom-type-field](/examples/custom-type-field) example for more
 info)
 
+### Conversion Hooks and afterLoad()
+
+Keep `parseValue()` and `toLine()` to converting between a line's text and the stored value. A value `parseValue()`
+can't convert, it leaves out. Rules about the data as a whole, such as a value that must not repeat across keys,
+and derived state, such as a reverse lookup, go in `afterLoad()`, which can walk the loaded entries with
+`processEntries()`. Returning false from `afterLoad()` fails the load.
+
 ## Strong Types and Versioning
 
 For robust interoperability, `StreamableDTO` supports strong typing and versioning of your DTO classes. This is achieved
