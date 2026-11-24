@@ -193,8 +193,8 @@ info)
 
 ### Conversion Hooks and afterLoad()
 
-Keep `parseValue()` and `toLine()` to converting between a line's text and the stored value. A value `parseValue()`
-can't convert, it leaves out. Rules about the data as a whole, such as a value that must not repeat across keys,
+Keep `parseValue()` and `toLine()` to converting between a line's text and the stored value. If `parseValue()` can't
+convert a value, it leaves it out. Rules about the data as a whole, such as a value that must not repeat across keys,
 and derived state, such as a reverse lookup, go in `afterLoad()`, which can walk the loaded entries with
 `processEntries()`. Returning false from `afterLoad()` fails the load.
 
